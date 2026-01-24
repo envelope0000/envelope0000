@@ -89,8 +89,11 @@
   let rows = []; // {area,banchi,name,code8,last4}
   let lastLoadedAt = null;
 
-  let fullscreenMode = false; // ★いま全画面表示中か
-  let overwriteMode = false;  // ★「一文字目で上書き」判定用
+  let fullscreenMode = false; // いま全画面表示中か
+
+  // ★上書き入力用（iPhoneの挙動に強い版）
+  let overwriteMode = false;
+  let prevValue = ""; // 直前の値（正規化後）を覚える
 
   const $q = document.getElementById("q");
   const $btn = document.getElementById("btn");
@@ -217,25 +220,29 @@
     }
   }
 
-  // ★フォーカス時：「次の入力は上書き判定」にする（タップだけでは消さない）
+  // ★フォーカス時：次の入力は上書き判定（タップだけでは消さない）
   $q.addEventListener("focus", () => {
     overwriteMode = false;
+    prevValue = normalize4($q.value);
   });
 
-  // ★入力UX：一文字目を押した瞬間に自動で消える（上書き入力）
+  // ★入力UX：一文字目を押した瞬間に確実に上書き（iPhoneでも残らない版）
   $q.addEventListener("input", () => {
     fullscreenMode = false;
 
-    // 1文字目を入れた瞬間に、前の値を消して今の1文字だけ残す
-    // （前回4桁が入っている状態で入力すると value が2文字以上になりやすい）
-    if (!overwriteMode && $q.value.length > 1) {
+    const current = $q.value;
+
+    // 直前より増えた＝新しい1文字が入った → それだけ残す
+    if (!overwriteMode && prevValue && current.length > prevValue.length) {
       overwriteMode = true;
-      const lastChar = $q.value.slice(-1);
+      const lastChar = current.slice(-1);
       $q.value = lastChar;
     }
 
     const v = normalize4($q.value);
     $q.value = v;
+
+    prevValue = v;
 
     if (v.length === 4) searchNow();
   });
@@ -243,6 +250,7 @@
   $btn.addEventListener("click", () => {
     fullscreenMode = false;
     overwriteMode = false;
+    prevValue = normalize4($q.value);
     searchNow();
   });
 
