@@ -296,11 +296,15 @@
   $q.addEventListener("touchstart", selectAllLater, { passive: true });
 
   $q.addEventListener("input", () => {
-    fullscreenMode = false;
-    const v = normalize4($q.value);
-    $q.value = v;
-    if (v.length === 4) searchNow();
-  });
+  fullscreenMode = false;
+  const v = normalize4($q.value);
+  $q.value = v;
+
+  if (v.length === 4) {
+    searchNow();
+    $q.blur();   // ★ ここを追加：キーボードを閉じる
+  }
+});
 
   $btn.addEventListener("click", searchNow);
 
@@ -308,3 +312,4 @@
 </script>
 </body>
 </html>
+
