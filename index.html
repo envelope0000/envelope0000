@@ -31,7 +31,7 @@ button{
   border-radius:12px; border:1px solid #d0d7de;
   background:#fff; font-weight:800; white-space:nowrap;
 }
-.meta{ margin-top:10px; font-size:12px; color:#57606a; line-height:1.35; }
+.meta{ margin-top:10px; font-size:12px; color:#57606a; }
 main{
   padding:6px var(--pad);
   padding-bottom:calc(28px + env(safe-area-inset-bottom));
@@ -41,36 +41,27 @@ main{
   background:#fff; border-radius:16px; padding:14px; margin:12px 0;
   box-shadow:0 6px 20px rgba(0,0,0,.06);
 }
-.area{ font-size:14px; color:#57606a; margin-bottom:6px; }
+.area{ font-size:14px; color:#57606a; }
 .name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
 .code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#57606a; }
 
 .banchi{
-  font-size:48px; font-weight:900; letter-spacing:.5px; line-height:1.05;
-  margin:2px 0 10px;
+  font-size:48px; font-weight:900; margin:6px 0; line-height:1.05;
 }
 .banchi.tap{
   text-decoration: underline;
   text-underline-offset: 6px;
 }
 
-.warn{ color:#b42318; font-size:13px; margin-top:10px; }
-.ok{ color:#1a7f37; }
-
 .card.fullscreen{
-  margin:0;
-  border-radius:0;
+  margin:0; border-radius:0;
   min-height:calc(100vh - 120px);
-  display:flex;
-  flex-direction:column;
+  display:flex; flex-direction:column;
   justify-content:flex-start;
   padding-top:16px;
   cursor:pointer;
-  user-select:none;
 }
 .card.fullscreen .banchi{ font-size:72px; }
-.card.fullscreen .name{ font-size:20px; }
-.card.fullscreen .area{ font-size:16px; }
 
 /* ===== 配置図モーダル ===== */
 #mapModal{
@@ -86,31 +77,21 @@ main{
   background:#fff;
   border-radius:16px;
   overflow:hidden;
-  box-shadow:0 10px 30px rgba(0,0,0,.25);
 }
 #mapHeader{
   display:flex;
-  align-items:center;
   justify-content:space-between;
+  align-items:center;
   padding:10px 12px;
   border-bottom:1px solid #eee;
-}
-#mapTitle{ font-weight:900; }
-#mapClose{
-  border:1px solid #ddd;
-  background:#fff;
-  border-radius:10px;
-  padding:6px 10px;
-  font-weight:900;
 }
 #mapBody{
   height:calc(100% - 44px);
   overflow:auto;
   -webkit-overflow-scrolling:touch;
-  background:#fff;
 }
 
-/* 画像+枠（最終おすすめ：内側描画＋白背景） */
+/* ===== 画像 + ハイライト ===== */
 #mapWrap{ position:relative; max-width:100%; }
 #mapImg{
   width:100%;
@@ -133,12 +114,15 @@ main{
 
   pointer-events:none;
   display:none;
-
-  /* ふわっと表示（控えめ） */
   opacity:0;
   transition: opacity 140ms ease;
 }
 #mapHighlight.show{ opacity:1; }
+
+/* iPhone SE など極小幅では少し控えめに */
+@media (max-width: 380px){
+  #mapHighlight{ border-width:3px; border-radius:5px; }
+}
 </style>
 </head>
 
@@ -146,9 +130,9 @@ main{
 <header>
   <h1>下4桁で検索</h1>
   <div class="row">
-    <input id="q" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+    <input id="q" type="tel" inputmode="numeric" maxlength="4"
            placeholder="例：7137" autocomplete="off" />
-    <button id="btn" type="button">検索</button>
+    <button id="btn">検索</button>
   </div>
   <div class="meta" id="status">読み込み中…</div>
 </header>
@@ -158,11 +142,11 @@ main{
 </main>
 
 <!-- 配置図モーダル -->
-<div id="mapModal" aria-hidden="true">
+<div id="mapModal">
   <div id="mapBox">
     <div id="mapHeader">
       <div id="mapTitle">配置図</div>
-      <button id="mapClose" type="button">閉じる</button>
+      <button id="mapClose">閉じる</button>
     </div>
     <div id="mapBody">
       <div id="mapWrap">
@@ -174,25 +158,17 @@ main{
 </div>
 
 <script>
-/* =========================
-   設定
-========================= */
+/* ===== 設定 ===== */
 const API_URL =
   "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 
-// 配置図（index.htmlと同じ階層に map.png）
 const MAP_IMAGE_URL = "map.png";
 const MAP_W = 1920;
 const MAP_H = 1358;
+const FIX = 2;     // 基本微調整
+const MIN = 8;     // 最小サイズ（丸化防止）
 
-// 見た目の最終微調整（まずは2。環境で気になるなら1〜3で調整）
-const FIX = 2;
-
-/* =========================
-   状態・DOM
-========================= */
 let rows = [];
-let lastLoadedAt = null;
 let fullscreenMode = false;
 
 const $q = document.getElementById("q");
@@ -206,256 +182,123 @@ const $mapHighlight = document.getElementById("mapHighlight");
 const $mapTitle = document.getElementById("mapTitle");
 const $mapClose = document.getElementById("mapClose");
 
-/* =========================
-   ユーティリティ
-========================= */
-function escapeHtml(s){
-  return (s ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-function normalize4(v){
-  return (v ?? "").toString().replace(/\D/g, "").slice(0, 4);
-}
-function pad8(codeStr){
-  const d = (codeStr ?? "").toString().replace(/\D/g, "");
-  return d.padStart(8,"0").slice(-8);
-}
+function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
+function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
 
-/* =========================
-   配置図モーダル
-========================= */
+/* ===== 配置図 ===== */
 function closeMap(){
-  $mapModal.style.display = "none";
-  $mapModal.setAttribute("aria-hidden","true");
-  $mapImg.src = "";
+  $mapModal.style.display="none";
+  $mapImg.src="";
   $mapHighlight.classList.remove("show");
-  $mapHighlight.style.display = "none";
+  $mapHighlight.style.display="none";
 }
-$mapClose.addEventListener("click", closeMap);
-$mapModal.addEventListener("click", (e)=>{ if(e.target === $mapModal) closeMap(); });
+$mapClose.onclick = closeMap;
+$mapModal.onclick = e=>{ if(e.target===$mapModal) closeMap(); };
 
-function openMap(area, banchi, rect){
+function openMap(area,banchi,rect){
   $mapTitle.textContent = `配置図（${area} / ${banchi}）`;
-  $mapModal.style.display = "block";
-  $mapModal.setAttribute("aria-hidden","false");
-
+  $mapModal.style.display="block";
   $mapHighlight.classList.remove("show");
-  $mapHighlight.style.display = "none";
+  $mapHighlight.style.display="none";
 
-  const draw = () => {
-    const imgRect = $mapImg.getBoundingClientRect();
-    const imgW = imgRect.width;
-    const imgH = imgRect.height;
+  const draw=()=>{
+    const r=$mapImg.getBoundingClientRect();
+    if(!r.width||!r.height) return;
 
-    if (!imgW || !imgH) return;
-    if (![rect.x,rect.y,rect.w,rect.h].every(n => Number.isFinite(n) && n > 0)) return;
+    const sx=r.width/MAP_W, sy=r.height/MAP_H;
+    const w0=rect.w*sx, h0=rect.h*sy;
 
-    const sx = imgW / MAP_W;
-    const sy = imgH / MAP_H;
+    const fix=Math.min(FIX, w0/4, h0/4);
 
-    const left   = rect.x * sx + FIX;
-    const top    = rect.y * sy + FIX;
-    const width  = rect.w * sx - FIX*2;
-    const height = rect.h * sy - FIX*2;
+    const left=rect.x*sx+fix;
+    const top=rect.y*sy+fix;
+    const width=Math.max(MIN, w0-fix*2);
+    const height=Math.max(MIN, h0-fix*2);
 
-    $mapHighlight.style.left   = left + "px";
-    $mapHighlight.style.top    = top + "px";
-    $mapHighlight.style.width  = Math.max(0, width) + "px";
-    $mapHighlight.style.height = Math.max(0, height) + "px";
-
-    $mapHighlight.style.display = "block";
-    requestAnimationFrame(() => $mapHighlight.classList.add("show"));
+    $mapHighlight.style.left=left+"px";
+    $mapHighlight.style.top=top+"px";
+    $mapHighlight.style.width=width+"px";
+    $mapHighlight.style.height=height+"px";
+    $mapHighlight.style.display="block";
+    requestAnimationFrame(()=> $mapHighlight.classList.add("show"));
   };
 
-  // iPhone Safari対策：onloadで確実に高さが出てから描画
-  $mapImg.onload = () => requestAnimationFrame(draw);
-  $mapImg.src = MAP_IMAGE_URL + "?t=" + Date.now();
+  $mapImg.onload=()=>requestAnimationFrame(draw);
+  $mapImg.src=MAP_IMAGE_URL+"?t="+Date.now();
 }
 
-/* =========================
-   番地タップ紐付け
-========================= */
-function wireBanchiClicks(){
-  $out.querySelectorAll(".banchi.tap[data-mapx]").forEach(el => {
-    el.addEventListener("click", (e) => {
+/* ===== 表示 ===== */
+function render(list,q){
+  if(q.length!==4){ $out.innerHTML=""; return; }
+
+  if(list.length===1 && !fullscreenMode){
+    const r=list[0];
+    $out.innerHTML=`
+      <div class="card fullscreen" id="fs">
+        <div class="area">${r.area}</div>
+        <div class="banchi tap"
+          data-area="${r.area}" data-banchi="${r.banchi}"
+          data-x="${r.mapX}" data-y="${r.mapY}"
+          data-w="${r.mapW}" data-h="${r.mapH}">
+          ${r.banchi}
+        </div>
+        <div class="name">${r.name}</div>
+        <div class="code">${r.code8}</div>
+      </div>`;
+    fullscreenMode=true;
+    document.getElementById("fs").onclick=()=>{ fullscreenMode=false; render(list,q); };
+  }else{
+    fullscreenMode=false;
+    $out.innerHTML=list.map(r=>`
+      <div class="card">
+        <div class="area">${r.area}</div>
+        <div class="banchi tap"
+          data-area="${r.area}" data-banchi="${r.banchi}"
+          data-x="${r.mapX}" data-y="${r.mapY}"
+          data-w="${r.mapW}" data-h="${r.mapH}">
+          ${r.banchi}
+        </div>
+        <div class="name">${r.name}</div>
+        <div class="code">${r.code8}</div>
+      </div>`).join("");
+  }
+
+  document.querySelectorAll(".banchi.tap").forEach(el=>{
+    el.onclick=e=>{
       e.stopPropagation();
-
-      const rect = {
-        x: Number(el.dataset.mapx),
-        y: Number(el.dataset.mapy),
-        w: Number(el.dataset.mapw),
-        h: Number(el.dataset.maph),
-      };
-
-      openMap(el.dataset.area || "", el.dataset.banchi || "", rect);
-    });
+      openMap(
+        el.dataset.area,
+        el.dataset.banchi,
+        {x:+el.dataset.x,y:+el.dataset.y,w:+el.dataset.w,h:+el.dataset.h}
+      );
+    };
   });
 }
 
-/* =========================
-   表示
-========================= */
-function render(list, query){
-  if (!query || query.length !== 4) {
-    fullscreenMode = false;
-    $out.innerHTML = "";
-    return;
-  }
+/* ===== 検索 ===== */
+function search(){
+  const q=normalize4($q.value); $q.value=q;
+  if(q.length!==4){ render([],q); return; }
+  render(rows.filter(r=>r.last4===q),q);
+}
 
-  // 1件ヒット → 全画面（タップで戻る）
-  if (list.length === 1 && !fullscreenMode) {
-    const r = list[0];
-    $out.innerHTML = `
-      <div class="card fullscreen" id="fsCard" title="タップで戻る">
-        <div class="area">${escapeHtml(r.area)}</div>
+$q.oninput=()=>{ if(normalize4($q.value).length===4){ search(); $q.blur(); } };
+$btn.onclick=()=>{ search(); $q.blur(); };
 
-        <div class="banchi tap"
-          data-area="${escapeHtml(r.area)}"
-          data-banchi="${escapeHtml(r.banchi)}"
-          data-mapx="${r.mapX}"
-          data-mapy="${r.mapY}"
-          data-mapw="${r.mapW}"
-          data-maph="${r.mapH}">
-          ${escapeHtml(r.banchi)}
-        </div>
-
-        <div class="name">${escapeHtml(r.name)}</div>
-        <div class="code">商品コード：${escapeHtml(r.code8)}</div>
-      </div>
-    `;
-    fullscreenMode = true;
-
-    document.getElementById("fsCard").addEventListener("click", () => {
-      fullscreenMode = false;
-      render(list, query);
+/* ===== データ取得 ===== */
+fetch(API_URL+"?t="+Date.now())
+  .then(r=>r.json())
+  .then(j=>{
+    rows=j.rows.map(x=>{
+      const code8=pad8(x.code8);
+      return {...x, code8, last4:code8.slice(-4)};
     });
-
-    wireBanchiClicks();
-    return;
-  }
-
-  fullscreenMode = false;
-
-  if (!list.length) {
-    $out.innerHTML = `<div class="warn">該当なし（${escapeHtml(query)}）</div>`;
-    return;
-  }
-
-  $out.innerHTML = list.map(r => `
-    <div class="card">
-      <div class="area">${escapeHtml(r.area)}</div>
-
-      <div class="banchi tap"
-        data-area="${escapeHtml(r.area)}"
-        data-banchi="${escapeHtml(r.banchi)}"
-        data-mapx="${r.mapX}"
-        data-mapy="${r.mapY}"
-        data-mapw="${r.mapW}"
-        data-maph="${r.mapH}">
-        ${escapeHtml(r.banchi)}
-      </div>
-
-      <div class="name">${escapeHtml(r.name)}</div>
-      <div class="code">商品コード：${escapeHtml(r.code8)}</div>
-    </div>
-  `).join("");
-
-  wireBanchiClicks();
-}
-
-/* =========================
-   検索
-========================= */
-function searchNow(){
-  const q = normalize4($q.value);
-  $q.value = q;
-
-  if (q.length !== 4) {
-    $status.textContent = "下4桁を入力してください";
-    render([], q);
-    return;
-  }
-
-  const hit = rows.filter(r => r.last4 === q);
-
-  const loaded = lastLoadedAt ? `（更新 ${lastLoadedAt}）` : "";
-  $status.textContent = `「${q}」：${hit.length}件 ${loaded}`;
-
-  render(hit, q);
-}
-
-/* =========================
-   入力UX（安定：全選択→上書き）
-========================= */
-function selectAllLater(){
-  setTimeout(() => { try { $q.setSelectionRange(0, $q.value.length); } catch {} }, 0);
-}
-$q.addEventListener("focus", () => { fullscreenMode=false; selectAllLater(); });
-$q.addEventListener("click", () => { fullscreenMode=false; selectAllLater(); });
-$q.addEventListener("touchstart", () => { fullscreenMode=false; selectAllLater(); }, { passive:true });
-
-// 4桁で検索＆キーボード閉じる
-$q.addEventListener("input", () => {
-  fullscreenMode = false;
-  const v = normalize4($q.value);
-  $q.value = v;
-  if (v.length === 4) {
-    searchNow();
-    $q.blur();
-  }
-});
-$btn.addEventListener("click", () => {
-  fullscreenMode = false;
-  searchNow();
-  $q.blur();
-});
-
-/* =========================
-   データ取得
-========================= */
-async function load(){
-  try{
-    $status.textContent = "データ取得中…";
-
-    const res = await fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" });
-    const j = await res.json();
-    if (!j || !Array.isArray(j.rows)) throw new Error("JSON rowsがない");
-
-    rows = j.rows.map(x => {
-      const y = {};
-      for (const k in x) y[String(k).trim()] = x[k];
-
-      const code8 = pad8(y.code8 ?? y.code ?? y["商品コード"] ?? "");
-      return {
-        area:   y.area ?? y["エリア"] ?? "",
-        banchi: y.banchi ?? y["番地"] ?? "",
-        name:   y.name ?? y["商品名"] ?? "",
-        code8,
-        last4: (y.last4 ?? code8.slice(-4)).toString(),
-
-        mapX: Number(y.mapX ?? 0),
-        mapY: Number(y.mapY ?? 0),
-        mapW: Number(y.mapW ?? 0),
-        mapH: Number(y.mapH ?? 0),
-      };
-    });
-
-    const now = new Date();
-    lastLoadedAt = `${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}`;
-
-    $status.textContent = `読み込み完了：${rows.length}件（更新 ${lastLoadedAt}）`;
-
-  } catch(e){
-    $status.textContent = "読み込み失敗（API設定を確認してください）";
-    $out.innerHTML = `<div class="warn">API取得に失敗しました。</div>`;
-  }
-}
-
-load().then(() => setTimeout(() => $q.focus(), 300));
+    $status.textContent=`読み込み完了：${rows.length}件`;
+    setTimeout(()=> $q.focus(),300);
+  })
+  .catch(()=>{
+    $status.textContent="読み込み失敗";
+  });
 </script>
 </body>
 </html>
