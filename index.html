@@ -21,15 +21,14 @@ header{
 }
 h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
 
-/* ★横幅対策：inputを短くしてボタンを画面内に固定 */
 .row{
   display:flex;
   gap:var(--gap);
   align-items:stretch;
 }
 #q{
-  flex: 1 1 auto;         /* 伸縮する */
-  min-width: 0;           /* ★重要：これがないと横に溢れやすい */
+  flex: 1 1 auto;
+  min-width: 0;                 /* ★溢れ防止 */
   font-size:22px;
   padding:12px 14px;
   border-radius:12px;
@@ -38,19 +37,24 @@ h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
   background:#fff;
 }
 button{
-  flex: 0 0 auto;         /* ボタンは縮ませない */
+  flex: 0 0 auto;
   font-size:16px;
-  padding:12px 12px;      /* 少し詰める */
+  padding:12px 12px;
   border-radius:12px;
   border:1px solid #d0d7de;
   background:#fff;
   font-weight:800;
   white-space:nowrap;
-}
 
-/* ボタン幅を固定して「必ず収まる」設計に */
-#btn{ width:72px; }        /* 検索 */
-#mic{ width:56px; display:none; }  /* 🎤（スマホのみ表示） */
+  -webkit-tap-highlight-color: transparent;
+}
+#btn{ width:72px; }
+#mic{ width:56px; }             /* ← JSでは判定しない。CSSでスマホのみ表示 */
+
+/* スマホのみ🎤表示（PCでは非表示） */
+@media (min-width: 768px){
+  #mic{ display:none !important; }
+}
 
 .meta{ margin-top:10px; font-size:12px; color:#57606a; }
 main{
@@ -141,7 +145,6 @@ main{
 }
 #mapHighlight.show{ opacity:1; }
 
-/* iPhone SE等の極小幅：さらに詰めて必ず1画面に収める */
 @media (max-width: 380px){
   :root{ --pad: 12px; --gap: 8px; }
   #q{ font-size:20px; padding:11px 12px; }
@@ -149,11 +152,6 @@ main{
   #btn{ width:66px; }
   #mic{ width:52px; }
   #mapHighlight{ border-width:3px; }
-}
-
-/* PC/タブレットでは🎤を出さない */
-@media (min-width: 768px){
-  #mic{ display:none !important; }
 }
 </style>
 </head>
@@ -199,7 +197,7 @@ const MAP_IMAGE_URL = "map.png";
 const MAP_W = 1920;
 const MAP_H = 1358;
 
-const FIX = 2; // 基本微調整（大きい枠はこれでピッタリ）
+const FIX = 2; // 基本微調整
 
 let rows = [];
 let fullscreenMode = false;
@@ -219,16 +217,18 @@ const $mapClose = document.getElementById("mapClose");
 function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
 
-/* ===== 音声入力（スマホのみ：ボタンで入力欄にフォーカス） ===== */
-function isPhone(){
-  return window.matchMedia("(max-width: 767px)").matches;
+/* ===== 🎤（スマホ）確実に反応させる：pointer/touch/click全部 ===== */
+function focusForVoice(e){
+  try { e.preventDefault(); } catch {}
+  fullscreenMode = false;
+  $q.focus();
+  // iOSで確実にカーソルを入れる
+  setTimeout(()=>{ try { $q.focus(); } catch{} }, 0);
 }
-if ($mic && isPhone()){
-  $mic.style.display = "inline-block";
-  $mic.addEventListener("click", () => {
-    fullscreenMode = false;
-    $q.focus(); // iPhoneならキーボードのマイクで音声入力できる
-  });
+if ($mic){
+  $mic.addEventListener("pointerdown", focusForVoice, { passive:false });
+  $mic.addEventListener("touchstart", focusForVoice, { passive:false });
+  $mic.addEventListener("click", focusForVoice);
 }
 
 /* ===== 配置図 ===== */
@@ -262,7 +262,6 @@ function openMap(area,banchi,rect){
     let width  = w0 - fix*2;
     let height = h0 - fix*2;
 
-    // 小さすぎる枠は「点表示」に切り替え（iPhone SEでも迷わない）
     const TOO_SMALL = 10;
     let isDot = false;
     if (width < TOO_SMALL || height < TOO_SMALL) {
@@ -283,13 +282,11 @@ function openMap(area,banchi,rect){
       $mapHighlight.style.borderRadius = "50%";
       $mapHighlight.style.background = "rgba(255,59,48,0.9)";
       $mapHighlight.style.borderWidth = "0";
-      $mapHighlight.style.boxShadow = "0 0 0 9999px rgba(0,0,0,.08)";
     } else {
       const radius = Math.min(6, width/4, height/4);
       $mapHighlight.style.borderRadius = radius + "px";
       $mapHighlight.style.background = "rgba(255,255,255,0.55)";
       $mapHighlight.style.borderWidth = "";
-      $mapHighlight.style.boxShadow = "0 0 0 9999px rgba(0,0,0,.08)";
     }
 
     $mapHighlight.style.display="block";
@@ -365,7 +362,7 @@ function search(){
   render(hit,q);
 }
 
-/* 入力：全選択→上書き（iPhoneで安定） */
+/* 入力：全選択→上書き */
 function selectAllLater(){
   setTimeout(()=>{ try{ $q.setSelectionRange(0,$q.value.length); }catch{} },0);
 }
