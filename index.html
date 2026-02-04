@@ -6,7 +6,7 @@
 <title>商品コード下4桁検索</title>
 
 <style>
-:root { --pad: 14px; }
+:root { --pad: 14px; --gap: 10px; }
 
 body{
   margin:0;
@@ -20,17 +20,38 @@ header{
   box-shadow:0 1px 10px rgba(0,0,0,.06);
 }
 h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
-.row{ display:flex; gap:10px; }
-input{
-  flex:1; font-size:22px; padding:12px 14px;
-  border-radius:12px; border:1px solid #d0d7de; outline:none;
+
+/* ★横幅対策：inputを短くしてボタンを画面内に固定 */
+.row{
+  display:flex;
+  gap:var(--gap);
+  align-items:stretch;
+}
+#q{
+  flex: 1 1 auto;         /* 伸縮する */
+  min-width: 0;           /* ★重要：これがないと横に溢れやすい */
+  font-size:22px;
+  padding:12px 14px;
+  border-radius:12px;
+  border:1px solid #d0d7de;
+  outline:none;
   background:#fff;
 }
 button{
-  font-size:16px; padding:12px 14px;
-  border-radius:12px; border:1px solid #d0d7de;
-  background:#fff; font-weight:800; white-space:nowrap;
+  flex: 0 0 auto;         /* ボタンは縮ませない */
+  font-size:16px;
+  padding:12px 12px;      /* 少し詰める */
+  border-radius:12px;
+  border:1px solid #d0d7de;
+  background:#fff;
+  font-weight:800;
+  white-space:nowrap;
 }
+
+/* ボタン幅を固定して「必ず収まる」設計に */
+#btn{ width:72px; }        /* 検索 */
+#mic{ width:56px; display:none; }  /* 🎤（スマホのみ表示） */
+
 .meta{ margin-top:10px; font-size:12px; color:#57606a; }
 main{
   padding:6px var(--pad);
@@ -120,13 +141,17 @@ main{
 }
 #mapHighlight.show{ opacity:1; }
 
-/* iPhone SE など極小幅では少し控えめに */
+/* iPhone SE等の極小幅：さらに詰めて必ず1画面に収める */
 @media (max-width: 380px){
+  :root{ --pad: 12px; --gap: 8px; }
+  #q{ font-size:20px; padding:11px 12px; }
+  button{ padding:11px 10px; }
+  #btn{ width:66px; }
+  #mic{ width:52px; }
   #mapHighlight{ border-width:3px; }
 }
 
-/* ===== 音声入力（スマホのみボタン表示） ===== */
-#mic{ width:56px; display:none; }
+/* PC/タブレットでは🎤を出さない */
 @media (min-width: 768px){
   #mic{ display:none !important; }
 }
@@ -194,7 +219,7 @@ const $mapClose = document.getElementById("mapClose");
 function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
 
-/* ===== 音声入力（スマホのみ） ===== */
+/* ===== 音声入力（スマホのみ：ボタンで入力欄にフォーカス） ===== */
 function isPhone(){
   return window.matchMedia("(max-width: 767px)").matches;
 }
@@ -234,11 +259,10 @@ function openMap(area,banchi,rect){
 
     const fix = Math.min(FIX, w0/4, h0/4);
 
-    // 通常の枠サイズ（縮尺＋微調整）
     let width  = w0 - fix*2;
     let height = h0 - fix*2;
 
-    // 小さすぎる枠は「点表示」に切り替え（iPhone SE対策）
+    // 小さすぎる枠は「点表示」に切り替え（iPhone SEでも迷わない）
     const TOO_SMALL = 10;
     let isDot = false;
     if (width < TOO_SMALL || height < TOO_SMALL) {
@@ -256,13 +280,11 @@ function openMap(area,banchi,rect){
     $mapHighlight.style.height = height + "px";
 
     if (isDot) {
-      // 点：赤丸（迷わない）
       $mapHighlight.style.borderRadius = "50%";
       $mapHighlight.style.background = "rgba(255,59,48,0.9)";
       $mapHighlight.style.borderWidth = "0";
       $mapHighlight.style.boxShadow = "0 0 0 9999px rgba(0,0,0,.08)";
     } else {
-      // 枠：四角（控えめ）
       const radius = Math.min(6, width/4, height/4);
       $mapHighlight.style.borderRadius = radius + "px";
       $mapHighlight.style.background = "rgba(255,255,255,0.55)";
@@ -274,7 +296,6 @@ function openMap(area,banchi,rect){
     requestAnimationFrame(()=> $mapHighlight.classList.add("show"));
   };
 
-  // iPhone Safari対策：画像読込完了後に描画
   $mapImg.onload=()=>requestAnimationFrame(draw);
   $mapImg.src=MAP_IMAGE_URL+"?t="+Date.now();
 }
