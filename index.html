@@ -124,6 +124,12 @@ main{
 @media (max-width: 380px){
   #mapHighlight{ border-width:3px; }
 }
+
+/* ===== 音声入力（スマホのみボタン表示） ===== */
+#mic{ width:56px; display:none; }
+@media (min-width: 768px){
+  #mic{ display:none !important; }
+}
 </style>
 </head>
 
@@ -133,7 +139,8 @@ main{
   <div class="row">
     <input id="q" type="tel" inputmode="numeric" maxlength="4"
            placeholder="例：7137" autocomplete="off" />
-    <button id="btn">検索</button>
+    <button id="btn" type="button">検索</button>
+    <button id="mic" type="button" aria-label="音声入力">🎤</button>
   </div>
   <div class="meta" id="status">読み込み中…</div>
 </header>
@@ -143,11 +150,11 @@ main{
 </main>
 
 <!-- 配置図モーダル -->
-<div id="mapModal">
+<div id="mapModal" aria-hidden="true">
   <div id="mapBox">
     <div id="mapHeader">
       <div id="mapTitle">配置図</div>
-      <button id="mapClose">閉じる</button>
+      <button id="mapClose" type="button">閉じる</button>
     </div>
     <div id="mapBody">
       <div id="mapWrap">
@@ -174,6 +181,7 @@ let fullscreenMode = false;
 
 const $q = document.getElementById("q");
 const $btn = document.getElementById("btn");
+const $mic = document.getElementById("mic");
 const $out = document.getElementById("out");
 const $status = document.getElementById("status");
 
@@ -185,6 +193,18 @@ const $mapClose = document.getElementById("mapClose");
 
 function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
+
+/* ===== 音声入力（スマホのみ） ===== */
+function isPhone(){
+  return window.matchMedia("(max-width: 767px)").matches;
+}
+if ($mic && isPhone()){
+  $mic.style.display = "inline-block";
+  $mic.addEventListener("click", () => {
+    fullscreenMode = false;
+    $q.focus(); // iPhoneならキーボードのマイクで音声入力できる
+  });
+}
 
 /* ===== 配置図 ===== */
 function closeMap(){
