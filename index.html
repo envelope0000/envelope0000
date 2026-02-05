@@ -21,38 +21,24 @@ header{
 }
 h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
 
-.row{
-  display:flex;
-  gap:var(--gap);
-  align-items:stretch;
-}
+.row{ display:flex; gap:var(--gap); align-items:stretch; }
 #q{
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size:22px;
-  padding:12px 14px;
-  border-radius:12px;
-  border:1px solid #d0d7de;
-  outline:none;
+  flex: 1 1 auto; min-width:0;
+  font-size:22px; padding:12px 14px;
+  border-radius:12px; border:1px solid #d0d7de; outline:none;
   background:#fff;
 }
 button{
   flex: 0 0 auto;
-  font-size:16px;
-  padding:12px 12px;
-  border-radius:12px;
-  border:1px solid #d0d7de;
-  background:#fff;
-  font-weight:800;
-  white-space:nowrap;
+  font-size:16px; padding:12px 12px;
+  border-radius:12px; border:1px solid #d0d7de;
+  background:#fff; font-weight:800; white-space:nowrap;
   -webkit-tap-highlight-color: transparent;
 }
 #btn{ width:72px; }
 #mic{ width:56px; }
 
-@media (min-width: 768px){
-  #mic{ display:none !important; }
-}
+@media (min-width: 768px){ #mic{ display:none !important; } }
 
 .meta{ margin-top:10px; font-size:12px; color:#57606a; }
 main{
@@ -68,14 +54,8 @@ main{
 .name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
 .code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#57606a; }
 
-.banchi{
-  font-size:48px; font-weight:900; margin:6px 0; line-height:1.05;
-}
-.banchi.tap{
-  text-decoration: underline;
-  text-underline-offset: 6px;
-}
-
+.banchi{ font-size:48px; font-weight:900; margin:6px 0; line-height:1.05; }
+.banchi.tap{ text-decoration: underline; text-underline-offset: 6px; }
 .warn{ color:#b42318; font-size:13px; margin-top:10px; }
 
 .card.fullscreen{
@@ -115,8 +95,6 @@ main{
   overflow:auto;
   -webkit-overflow-scrolling:touch;
 }
-
-/* ===== 画像 + ハイライト ===== */
 #mapWrap{ position:relative; max-width:100%; }
 #mapImg{
   width:100%;
@@ -127,15 +105,10 @@ main{
   z-index:1;
 }
 #mapHighlight{
-  position:absolute;
-  z-index:5;
-
-  border:4px solid #ff3b30;
-  box-sizing:border-box;
-
+  position:absolute; z-index:5;
+  border:4px solid #ff3b30; box-sizing:border-box;
   background: rgba(255,255,255,0.55);
   box-shadow: 0 0 0 9999px rgba(0,0,0,.08);
-
   pointer-events:none;
   display:none;
   opacity:0;
@@ -151,6 +124,14 @@ main{
   #mic{ width:52px; }
   #mapHighlight{ border-width:3px; }
 }
+
+/* ★音声入力用の隠し入力欄（テキスト＝マイクが出やすい） */
+#voice{
+  position:fixed;
+  left:-10000px; top:0;
+  width:1px; height:1px;
+  opacity:0;
+}
 </style>
 </head>
 
@@ -158,16 +139,9 @@ main{
 <header>
   <h1>下4桁で検索</h1>
   <div class="row">
-    <!-- ★変更点：type="text" にして音声入力（マイク）を出やすくする -->
-    <input
-      id="q"
-      type="text"
-      inputmode="numeric"
-      pattern="[0-9]*"
-      maxlength="4"
-      placeholder="例：7137"
-      autocomplete="off"
-    />
+    <!-- 検索欄は数字最適（今まで通り） -->
+    <input id="q" type="tel" inputmode="numeric" maxlength="4"
+           placeholder="例：7137" autocomplete="off" />
     <button id="btn" type="button">検索</button>
     <button id="mic" type="button" aria-label="音声入力">🎤</button>
   </div>
@@ -177,6 +151,9 @@ main{
 <main>
   <div id="out"></div>
 </main>
+
+<!-- ★音声入力専用（テキスト扱い） -->
+<input id="voice" type="text" autocomplete="off" />
 
 <!-- 配置図モーダル -->
 <div id="mapModal" aria-hidden="true">
@@ -211,6 +188,7 @@ let fullscreenMode = false;
 const $q = document.getElementById("q");
 const $btn = document.getElementById("btn");
 const $mic = document.getElementById("mic");
+const $voice = document.getElementById("voice");
 const $out = document.getElementById("out");
 const $status = document.getElementById("status");
 
@@ -223,18 +201,41 @@ const $mapClose = document.getElementById("mapClose");
 function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
 
-/* ===== 🎤：確実に入力欄へフォーカス（iOSはここまでが限界） ===== */
-function focusForVoice(e){
+/* ===== 音声入力：隠しtextにフォーカス → 入った値を4桁にして検索欄へ ===== */
+function startVoice(e){
   try { e.preventDefault(); } catch {}
   fullscreenMode = false;
-  $q.focus();
-  setTimeout(()=>{ try { $q.focus(); } catch{} }, 0);
+
+  // 入力クリア
+  $voice.value = "";
+
+  // ★テキスト欄にフォーカス（iOSが“文章入力”としてマイクを出しやすい）
+  $voice.focus();
+
+  // 1回で入らないことがあるので保険
+  setTimeout(()=>{ try { $voice.focus(); } catch{} }, 0);
+
+  // ユーザーに分かりやすく（必要なら消してOK）
+  $status.textContent = "音声入力：キーボード左下のマイクを押してください";
 }
+
 if ($mic){
-  $mic.addEventListener("pointerdown", focusForVoice, { passive:false });
-  $mic.addEventListener("touchstart", focusForVoice, { passive:false });
-  $mic.addEventListener("click", focusForVoice);
+  $mic.addEventListener("pointerdown", startVoice, { passive:false });
+  $mic.addEventListener("touchstart", startVoice, { passive:false });
+  $mic.addEventListener("click", startVoice);
 }
+
+// 音声（または手入力）で入ったら、数字4桁にして検索へ移す
+$voice.addEventListener("input", ()=>{
+  const v = normalize4($voice.value);
+  if (v.length === 4){
+    $q.value = v;
+    search();
+    $voice.blur();
+    $q.blur();
+    $status.textContent = `「${v}」：検索しました`;
+  }
+});
 
 /* ===== 配置図 ===== */
 function closeMap(){
