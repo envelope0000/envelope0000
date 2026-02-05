@@ -29,8 +29,8 @@
       border-radius:12px; border:1px solid #d0d7de; outline:none;
       background:#fff;
       appearance: none;
+      /* iOSでズームされるのを防ぐため、最低でも16px以上（ここでは22px）を維持 */
     }
-    /* 検索中に入力欄を目立たせる */
     #q:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.1); }
 
     button{
@@ -62,9 +62,9 @@
     .card{
       background:#fff; border-radius:16px; padding:14px; margin:12px 0;
       box-shadow:0 6px 20px rgba(0,0,0,.06);
-      animation: slideUp 0.3s ease-out;
+      animation: slideUp 0.2s ease-out;
     }
-    @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 
     .area{ font-size:14px; color:#57606a; }
     .name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
@@ -162,8 +162,25 @@ function normalize4(v){
   num = num.replace(/\D/g, "");
   return num.slice(-4);
 }
-
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
+
+/* ===== 全選択の制御 ===== */
+function selectAllText(input) {
+  // iOS/Androidで確実に全選択させるためのセット
+  setTimeout(() => {
+    input.setSelectionRange(0, 9999);
+    input.select();
+  }, 10);
+}
+
+// フォーカス時、クリック時、どちらでも全選択を実行
+$q.addEventListener("focus", (e) => {
+  fullscreenMode = false;
+  selectAllText(e.target);
+});
+$q.addEventListener("click", (e) => {
+  selectAllText(e.target);
+});
 
 /* ===== 音声認識 ===== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -174,10 +191,10 @@ if (SpeechRecognition) {
   recognition.lang = 'ja-JP';
   
   recognition.onstart = () => {
-    fullscreenMode = false; // 音声開始でフルスクリーン解除
-    $q.value = "";          // 入力欄をクリア
+    fullscreenMode = false;
+    $q.value = ""; // 次の入力のためにクリア
     $mic.classList.add("listening");
-    $status.textContent = "どうぞ、お話しください...";
+    $status.textContent = "音声聞き取り中...";
   };
 
   recognition.onresult = (event) => {
@@ -187,7 +204,7 @@ if (SpeechRecognition) {
       $q.value = v;
       search();
     } else {
-      $status.textContent = `数字がありませんでした (${transcript})`;
+      $status.textContent = `数字を認識できませんでした (${transcript})`;
     }
   };
 
@@ -196,7 +213,7 @@ if (SpeechRecognition) {
 }
 
 $mic.onclick = () => {
-  if (!recognition) return alert("このブラウザは音声入力非対応です");
+  if (!recognition) return alert("ブラウザが音声入力に対応していません");
   recognition.start();
 };
 
@@ -207,7 +224,7 @@ function search(){
   if(q.length !== 4) return;
 
   const hit = rows.filter(r => r.last4 === q);
-  $status.textContent = `「${q}」の検索結果: ${hit.length}件`;
+  $status.textContent = `「${q}」の結果: ${hit.length}件`;
   render(hit, q);
 }
 
@@ -217,7 +234,6 @@ function render(list, q){
     return;
   }
 
-  // 1件のみ＆フルスクリーンモード
   if(list.length === 1 && !fullscreenMode){
     const r = list[0];
     $out.innerHTML = `
@@ -226,11 +242,16 @@ function render(list, q){
         <div class="banchi tap" data-info='${JSON.stringify(r)}'>${r.banchi}</div>
         <div class="name">${r.name}</div>
         <div class="code">${r.code8}</div>
-        <div style="margin-top:auto; color:#888; font-size:12px; text-align:center;">タップで一覧に戻る</div>
+        <div style="margin-top:auto; color:#888; font-size:12px; text-align:center; padding:20px;">
+          タップで一覧表示に戻る
+        </div>
       </div>`;
     fullscreenMode = true;
     document.getElementById("fs").onclick = (e) => {
-      if(!e.target.classList.contains('tap')){ fullscreenMode = false; render(list, q); }
+      if(!e.target.classList.contains('tap')){ 
+        fullscreenMode = false; 
+        render(list, q); 
+      }
     };
   } else {
     fullscreenMode = false;
@@ -243,7 +264,6 @@ function render(list, q){
       </div>`).join("");
   }
 
-  // 番地タップでマップ表示
   document.querySelectorAll(".tap").forEach(el => {
     el.onclick = (e) => {
       e.stopPropagation();
@@ -253,7 +273,7 @@ function render(list, q){
   });
 }
 
-/* ===== 配置図モーダル ===== */
+/* ===== マップ表示 ===== */
 function openMap(area, banchi, rect){
   document.getElementById("mapTitle").textContent = `配置図 (${area} ${banchi})`;
   $mapModal.style.display = "block";
@@ -272,22 +292,18 @@ function openMap(area, banchi, rect){
 
 document.getElementById("mapClose").onclick = () => { $mapModal.style.display="none"; $mapHighlight.classList.remove("show"); };
 
-/* ===== 入力制御 (スムーズな連続検索のため) ===== */
-
-// 入力欄タップで「全選択」して、すぐ書き換えられるようにする
-$q.addEventListener("focus", (e) => {
-  fullscreenMode = false; // 入力開始でフルスクリーン解除
-  setTimeout(() => e.target.select(), 10);
-});
-
-// 入力されたら即検索 (4桁になった瞬間)
+/* ===== 入力監視 ===== */
 $q.oninput = () => {
-  if($q.value.length === 4) { search(); $q.blur(); }
+  const v = normalize4($q.value);
+  if(v.length === 4) {
+    $q.value = v;
+    search();
+    $q.blur(); // 入力完了でキーボードを閉じる
+  }
 };
-
 $btn.onclick = () => { search(); $q.blur(); };
 
-/* ===== 初期ロード ===== */
+/* ===== データロード ===== */
 fetch(API_URL + "?t=" + Date.now())
   .then(r => r.json())
   .then(j => {
@@ -295,9 +311,9 @@ fetch(API_URL + "?t=" + Date.now())
       const code8 = pad8(x.code8);
       return {...x, code8, last4:code8.slice(-4)};
     });
-    $status.textContent = `準備完了：${rows.length}件`;
+    $status.textContent = `読み込み完了：${rows.length}件`;
   })
-  .catch(() => { $status.textContent = "エラー：読み込み失敗"; });
+  .catch(() => { $status.textContent = "読み込みエラー"; });
 </script>
 </body>
 </html>
