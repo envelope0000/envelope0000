@@ -1,145 +1,138 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>商品コード下4桁検索</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>商品コード下4桁検索</title>
 
-<style>
-:root { --pad: 14px; --gap: 10px; }
+  <style>
+    :root { --pad: 14px; --gap: 10px; }
 
-body{
-  margin:0;
-  background:#f6f7f8;
-  font-family:-apple-system, system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
-}
-header{
-  position:sticky; top:0; z-index:10;
-  background:#fff;
-  padding:calc(var(--pad) + env(safe-area-inset-top)) var(--pad) var(--pad);
-  box-shadow:0 1px 10px rgba(0,0,0,.06);
-}
-h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
+    body{
+      margin:0;
+      background:#f6f7f8;
+      font-family:-apple-system, system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background:#fff;
+      padding:calc(var(--pad) + env(safe-area-inset-top)) var(--pad) var(--pad);
+      box-shadow:0 1px 10px rgba(0,0,0,.06);
+    }
+    h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
 
-.row{ display:flex; gap:var(--gap); align-items:stretch; }
-#q{
-  flex: 1 1 auto; min-width:0;
-  font-size:22px; padding:12px 14px;
-  border-radius:12px; border:1px solid #d0d7de; outline:none;
-  background:#fff;
-}
-button{
-  flex: 0 0 auto;
-  font-size:16px; padding:12px 12px;
-  border-radius:12px; border:1px solid #d0d7de;
-  background:#fff; font-weight:800; white-space:nowrap;
-  -webkit-tap-highlight-color: transparent;
-}
-#btn{ width:72px; }
-#mic{ width:56px; }
+    .row{ display:flex; gap:var(--gap); align-items:stretch; }
+    #q{
+      flex: 1 1 auto; min-width:0;
+      font-size:22px; padding:12px 14px;
+      border-radius:12px; border:1px solid #d0d7de; outline:none;
+      background:#fff;
+    }
+    button{
+      flex: 0 0 auto;
+      font-size:16px; padding:12px 12px;
+      border-radius:12px; border:1px solid #d0d7de;
+      background:#fff; font-weight:800; white-space:nowrap;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+    #btn{ width:72px; }
+    #mic{ width:56px; transition: all 0.2s; }
+    #mic.listening { background: #ffeded; border-color: #ff3b30; transform: scale(1.05); }
 
-@media (min-width: 768px){ #mic{ display:none !important; } }
+    @media (min-width: 768px){ #mic{ display:none !important; } }
 
-.meta{ margin-top:10px; font-size:12px; color:#57606a; }
-main{
-  padding:6px var(--pad);
-  padding-bottom:calc(28px + env(safe-area-inset-bottom));
-}
+    .meta{ margin-top:10px; font-size:12px; color:#57606a; min-height: 1.2em; }
+    main{
+      padding:6px var(--pad);
+      padding-bottom:calc(28px + env(safe-area-inset-bottom));
+    }
 
-.card{
-  background:#fff; border-radius:16px; padding:14px; margin:12px 0;
-  box-shadow:0 6px 20px rgba(0,0,0,.06);
-}
-.area{ font-size:14px; color:#57606a; }
-.name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
-.code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#57606a; }
+    .card{
+      background:#fff; border-radius:16px; padding:14px; margin:12px 0;
+      box-shadow:0 6px 20px rgba(0,0,0,.06);
+    }
+    .area{ font-size:14px; color:#57606a; }
+    .name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
+    .code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#57606a; }
 
-.banchi{ font-size:48px; font-weight:900; margin:6px 0; line-height:1.05; }
-.banchi.tap{ text-decoration: underline; text-underline-offset: 6px; }
-.warn{ color:#b42318; font-size:13px; margin-top:10px; }
+    .banchi{ font-size:48px; font-weight:900; margin:6px 0; line-height:1.05; }
+    .banchi.tap{ text-decoration: underline; text-underline-offset: 6px; color: #007aff; cursor: pointer; }
+    .warn{ color:#b42318; font-size:13px; margin-top:10px; }
 
-.card.fullscreen{
-  margin:0; border-radius:0;
-  min-height:calc(100vh - 120px);
-  display:flex; flex-direction:column;
-  justify-content:flex-start;
-  padding-top:16px;
-  cursor:pointer;
-}
-.card.fullscreen .banchi{ font-size:72px; }
+    .card.fullscreen{
+      margin:0; border-radius:0;
+      min-height:calc(100vh - 120px);
+      display:flex; flex-direction:column;
+      justify-content:flex-start;
+      padding-top:16px;
+      cursor:pointer;
+    }
+    .card.fullscreen .banchi{ font-size:72px; }
 
-/* ===== 配置図モーダル ===== */
-#mapModal{
-  display:none;
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.65);
-  z-index:9999;
-}
-#mapBox{
-  position:absolute;
-  inset:12px;
-  background:#fff;
-  border-radius:16px;
-  overflow:hidden;
-}
-#mapHeader{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:10px 12px;
-  border-bottom:1px solid #eee;
-}
-#mapBody{
-  height:calc(100% - 44px);
-  overflow:auto;
-  -webkit-overflow-scrolling:touch;
-}
-#mapWrap{ position:relative; max-width:100%; }
-#mapImg{
-  width:100%;
-  height:auto;
-  display:block;
-  max-width:100%;
-  position:relative;
-  z-index:1;
-}
-#mapHighlight{
-  position:absolute; z-index:5;
-  border:4px solid #ff3b30; box-sizing:border-box;
-  background: rgba(255,255,255,0.55);
-  box-shadow: 0 0 0 9999px rgba(0,0,0,.08);
-  pointer-events:none;
-  display:none;
-  opacity:0;
-  transition: opacity 140ms ease;
-}
-#mapHighlight.show{ opacity:1; }
+    /* ===== 配置図モーダル ===== */
+    #mapModal{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.65);
+      z-index:9999;
+    }
+    #mapBox{
+      position:absolute;
+      inset:12px;
+      background:#fff;
+      border-radius:16px;
+      overflow:hidden;
+    }
+    #mapHeader{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid #eee;
+    }
+    #mapBody{
+      height:calc(100% - 44px);
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    #mapWrap{ position:relative; max-width:100%; }
+    #mapImg{
+      width:100%;
+      height:auto;
+      display:block;
+      max-width:100%;
+      position:relative;
+      z-index:1;
+    }
+    #mapHighlight{
+      position:absolute; z-index:5;
+      border:4px solid #ff3b30; box-sizing:border-box;
+      background: rgba(255,255,255,0.4);
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.1);
+      pointer-events:none;
+      display:none;
+      opacity:0;
+      transition: opacity 140ms ease;
+    }
+    #mapHighlight.show{ opacity:1; }
 
-@media (max-width: 380px){
-  :root{ --pad: 12px; --gap: 8px; }
-  #q{ font-size:20px; padding:11px 12px; }
-  button{ padding:11px 10px; }
-  #btn{ width:66px; }
-  #mic{ width:52px; }
-  #mapHighlight{ border-width:3px; }
-}
-
-/* ★音声入力用の隠し入力欄（テキスト＝マイクが出やすい） */
-#voice{
-  position:fixed;
-  left:-10000px; top:0;
-  width:1px; height:1px;
-  opacity:0;
-}
-</style>
+    @media (max-width: 380px){
+      :root{ --pad: 12px; --gap: 8px; }
+      #q{ font-size:20px; padding:11px 12px; }
+      button{ padding:11px 10px; }
+      #btn{ width:66px; }
+      #mic{ width:52px; }
+      #mapHighlight{ border-width:3px; }
+    }
+  </style>
 </head>
 
 <body>
 <header>
   <h1>下4桁で検索</h1>
   <div class="row">
-    <!-- 検索欄は数字最適（今まで通り） -->
     <input id="q" type="tel" inputmode="numeric" maxlength="4"
            placeholder="例：7137" autocomplete="off" />
     <button id="btn" type="button">検索</button>
@@ -152,10 +145,6 @@ main{
   <div id="out"></div>
 </main>
 
-<!-- ★音声入力専用（テキスト扱い） -->
-<input id="voice" type="text" autocomplete="off" />
-
-<!-- 配置図モーダル -->
 <div id="mapModal" aria-hidden="true">
   <div id="mapBox">
     <div id="mapHeader">
@@ -173,13 +162,10 @@ main{
 
 <script>
 /* ===== 設定 ===== */
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
-
+const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 const MAP_IMAGE_URL = "map.png";
 const MAP_W = 1920;
 const MAP_H = 1358;
-
 const FIX = 2;
 
 let rows = [];
@@ -188,7 +174,6 @@ let fullscreenMode = false;
 const $q = document.getElementById("q");
 const $btn = document.getElementById("btn");
 const $mic = document.getElementById("mic");
-const $voice = document.getElementById("voice");
 const $out = document.getElementById("out");
 const $status = document.getElementById("status");
 
@@ -198,46 +183,65 @@ const $mapHighlight = document.getElementById("mapHighlight");
 const $mapTitle = document.getElementById("mapTitle");
 const $mapClose = document.getElementById("mapClose");
 
-function normalize4(v){ return (v||"").replace(/\D/g,"").slice(0,4); }
+/* ===== 数字の正規化（全角→半角、不要文字削除） ===== */
+function normalize4(v){
+  if(!v) return "";
+  // 全角数字を半角に変換
+  let num = v.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  // 数字以外を削除して後ろから4桁取る
+  num = num.replace(/\D/g, "");
+  return num.slice(-4);
+}
+
 function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
 
-/* ===== 音声入力：隠しtextにフォーカス → 入った値を4桁にして検索欄へ ===== */
-function startVoice(e){
-  try { e.preventDefault(); } catch {}
-  fullscreenMode = false;
+/* ===== 音声認識 (Web Speech API) ===== */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
 
-  // 入力クリア
-  $voice.value = "";
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.interimResults = false;
+  recognition.continuous = false;
 
-  // ★テキスト欄にフォーカス（iOSが“文章入力”としてマイクを出しやすい）
-  $voice.focus();
+  recognition.onstart = () => {
+    $status.textContent = "音声聞き取り中...";
+    $mic.classList.add("listening");
+  };
 
-  // 1回で入らないことがあるので保険
-  setTimeout(()=>{ try { $voice.focus(); } catch{} }, 0);
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const v = normalize4(transcript);
+    if (v.length > 0) {
+      $q.value = v;
+      $status.textContent = `音声入力: ${v}`;
+      search();
+    } else {
+      $status.textContent = `数字を認識できませんでした (${transcript})`;
+    }
+  };
 
-  // ユーザーに分かりやすく（必要なら消してOK）
-  $status.textContent = "音声入力：キーボード左下のマイクを押してください";
+  recognition.onerror = (e) => {
+    $status.textContent = "音声認識エラー: " + e.error;
+    $mic.classList.remove("listening");
+  };
+
+  recognition.onend = () => {
+    $mic.classList.remove("listening");
+  };
 }
 
-if ($mic){
-  $mic.addEventListener("pointerdown", startVoice, { passive:false });
-  $mic.addEventListener("touchstart", startVoice, { passive:false });
-  $mic.addEventListener("click", startVoice);
-}
-
-// 音声（または手入力）で入ったら、数字4桁にして検索へ移す
-$voice.addEventListener("input", ()=>{
-  const v = normalize4($voice.value);
-  if (v.length === 4){
-    $q.value = v;
-    search();
-    $voice.blur();
-    $q.blur();
-    $status.textContent = `「${v}」：検索しました`;
+$mic.onclick = () => {
+  if (!recognition) {
+    alert("お使いのブラウザは音声認識に対応していません。SafariかChromeをお試しください。");
+    return;
   }
-});
+  fullscreenMode = false;
+  recognition.start();
+};
 
-/* ===== 配置図 ===== */
+/* ===== 配置図表示ロジック ===== */
 function closeMap(){
   $mapModal.style.display="none";
   $mapImg.src="";
@@ -262,19 +266,10 @@ function openMap(area,banchi,rect){
 
     const w0 = rect.w * sx;
     const h0 = rect.h * sy;
-
     const fix = Math.min(FIX, w0/4, h0/4);
 
     let width  = w0 - fix*2;
     let height = h0 - fix*2;
-
-    const TOO_SMALL = 10;
-    let isDot = false;
-    if (width < TOO_SMALL || height < TOO_SMALL) {
-      isDot = true;
-      width = 10;
-      height = 10;
-    }
 
     const left = rect.x * sx + fix;
     const top  = rect.y * sy + fix;
@@ -283,18 +278,6 @@ function openMap(area,banchi,rect){
     $mapHighlight.style.top    = top + "px";
     $mapHighlight.style.width  = width + "px";
     $mapHighlight.style.height = height + "px";
-
-    if (isDot) {
-      $mapHighlight.style.borderRadius = "50%";
-      $mapHighlight.style.background = "rgba(255,59,48,0.9)";
-      $mapHighlight.style.borderWidth = "0";
-    } else {
-      const radius = Math.min(6, width/4, height/4);
-      $mapHighlight.style.borderRadius = radius + "px";
-      $mapHighlight.style.background = "rgba(255,255,255,0.55)";
-      $mapHighlight.style.borderWidth = "";
-    }
-
     $mapHighlight.style.display="block";
     requestAnimationFrame(()=> $mapHighlight.classList.add("show"));
   };
@@ -303,7 +286,7 @@ function openMap(area,banchi,rect){
   $mapImg.src=MAP_IMAGE_URL+"?t="+Date.now();
 }
 
-/* ===== 表示 ===== */
+/* ===== 描画 ===== */
 function render(list,q){
   if(q.length!==4){ $out.innerHTML=""; return; }
 
@@ -322,7 +305,11 @@ function render(list,q){
         <div class="code">${r.code8}</div>
       </div>`;
     fullscreenMode=true;
-    document.getElementById("fs").onclick=()=>{ fullscreenMode=false; render(list,q); };
+    document.getElementById("fs").onclick=(e)=>{ 
+      if(!e.target.classList.contains('tap')){
+        fullscreenMode=false; render(list,q); 
+      }
+    };
   }else{
     fullscreenMode=false;
     if(!list.length){
@@ -355,7 +342,7 @@ function render(list,q){
   });
 }
 
-/* ===== 検索 ===== */
+/* ===== 検索実行 ===== */
 function search(){
   const q=normalize4($q.value); $q.value=q;
   if(q.length!==4){
@@ -368,22 +355,14 @@ function search(){
   render(hit,q);
 }
 
-/* 入力：全選択→上書き */
-function selectAllLater(){
-  setTimeout(()=>{ try{ $q.setSelectionRange(0,$q.value.length); }catch{} },0);
-}
-$q.addEventListener("focus", ()=>{ fullscreenMode=false; selectAllLater(); });
-$q.addEventListener("click", ()=>{ fullscreenMode=false; selectAllLater(); });
-$q.addEventListener("touchstart", ()=>{ fullscreenMode=false; selectAllLater(); }, {passive:true});
-
-/* 4桁で即検索＆キーボード閉じる */
+$q.addEventListener("focus", ()=>{ fullscreenMode=false; });
 $q.oninput=()=>{
-  const v=normalize4($q.value); $q.value=v;
-  if(v.length===4){ search(); $q.blur(); }
+  const v=normalize4($q.value);
+  if(v.length===4){ $q.value=v; search(); $q.blur(); }
 };
 $btn.onclick=()=>{ search(); $q.blur(); };
 
-/* ===== データ取得 ===== */
+/* ===== データロード ===== */
 fetch(API_URL+"?t="+Date.now())
   .then(r=>r.json())
   .then(j=>{
@@ -395,7 +374,7 @@ fetch(API_URL+"?t="+Date.now())
     setTimeout(()=> $q.focus(),300);
   })
   .catch(()=>{
-    $status.textContent="読み込み失敗";
+    $status.textContent="データの読み込みに失敗しました";
   });
 </script>
 </body>
