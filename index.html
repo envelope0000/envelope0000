@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.9.6)</title>
+  <title>商品検索 PRO (v2.9.7)</title>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
@@ -61,7 +61,7 @@
     <div id="resBanchi" class="info-banchi">--</div>
     <div style="flex:1; min-width:0;"><div id="resArea" style="font-size:11px; color:#666; margin-bottom:2px;">エリア</div><div id="resName" class="info-name">商品名</div></div>
   </div>
-  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.6-anti-drift</span></div>
+  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.7-logic-lock</span></div>
 </footer>
 
 <script>
@@ -108,7 +108,6 @@ function showMap(r) {
   document.getElementById("resArea").textContent = r.area; document.getElementById("resName").textContent = r.name; document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 1. まず横幅を強制固定
     const screenW = window.innerWidth;
     const ratio = screenW / 1920;
     
@@ -119,22 +118,27 @@ function showMap(r) {
 
     if (pzoom) pzoom.destroy();
     
-    // 2. Panzoomを初期化（横方向の自由移動を制限する設定）
+    // Panzoomの初期化
     pzoom = Panzoom($mapWrap, { 
       maxScale: 8, minScale: 1, 
-      contain: 'outside',
-      disableXAxis: false // 拡大時は横にも動ける必要があるが、初期は0固定
+      contain: 'outside'
     });
     
-    // 3. 配置計算（0.2秒待ってから確実に実行する）
+    // 【横スライド完全封印ロジック】
+    // ズーム倍率が1倍のときは、横移動(X)を強制的に0に固定する
+    $mapWrap.addEventListener('panzoompan', (e) => {
+      const scale = pzoom.getScale();
+      if (scale <= 1.01) { // ほぼ1倍のとき
+        pzoom.pan(0, e.detail.y, { silent: true });
+      }
+    });
+
     setTimeout(() => {
         const containerH = $mapArea.clientHeight;
         const highlightY = r.mapY * ratio;
         const offsetY = highlightY - (containerH / 2) + ((r.mapH * ratio) / 2);
-        
-        // 横位置(X)を0に強制リセットしつつ、縦(Y)だけ移動
         pzoom.pan(0, -offsetY, { silent: false });
-    }, 200);
+    }, 150);
   };
   
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
