@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.1)</title>
+  <title>商品検索 PRO (v2.2.0)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -24,14 +24,15 @@
 
     /* マップエリア */
     #inlineMapContainer {
-      display: none; background: #fff; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #eee; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
-    #mapWrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-    #mapImg { display: block; user-select: none; width: 1920px !important; height: 1358px !important; max-width: none !important; }
+    /* panzoomを適用するラッパー。サイズを画像と同一にするのがコツ */
+    #mapWrap { width: 1920px; height: 1358px; cursor: grab; }
+    #mapImg { display: block; user-select: none; width: 1920px; height: 1358px; max-width: none; }
     
     #mapHighlight {
-      position: absolute; border: 6px solid #ff3b30; background: rgba(255,59,48,0.3);
+      position: absolute; border: 8px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
       box-shadow: 0 0 0 4000px rgba(0,0,0,0.1);
     }
@@ -43,7 +44,6 @@
     }
     .info-banchi { font-size: 32px; font-weight: 900; color: var(--accent); }
 
-    /* バージョン表示用のスタイル */
     .version-info {
       max-width: 800px; margin: 5px auto; padding: 0 12px;
       display: flex; justify-content: space-between;
@@ -81,14 +81,14 @@
 </div>
 
 <div class="version-info">
-  <span>v2.1.0-fixed</span>
+  <span>v2.2.0-stable</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
 <main id="out"></main>
 
 <script>
-const VERSION = "2.1.0"; // ここを書き換えると画面に反映されます
+const VERSION = "2.2.0";
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 
 let rows = [];
@@ -122,8 +122,8 @@ if (SpeechRec) {
   recognition.onend = () => { if(isContinuous) recognition.start(); };
   $mic.onclick = () => {
     isContinuous = !isContinuous;
-    if (isContinuous) { recognition.start(); $mic.classList.add("active"); $status.textContent="連続音声入力中..."; }
-    else { recognition.stop(); $mic.classList.remove("active"); $status.textContent="音声を停止しました"; }
+    if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
+    else { recognition.stop(); $mic.classList.remove("active"); }
   };
 }
 
@@ -143,7 +143,6 @@ function search() {
           <div class="card-banchi">${r.banchi}</div>
         </div>
       </div>`).join("");
-    $status.textContent = "候補から選んでください";
   } else {
     $mapArea.style.display = "none";
     $out.innerHTML = `<div class="warn" style="text-align:center; padding:20px; color:red; font-weight:bold;">「${val}」なし</div>`;
@@ -151,7 +150,7 @@ function search() {
   $q.blur();
 }
 
-/* マップ表示 */
+/* マップ表示（Panzoom内部座標同期版） */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -159,45 +158,56 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   if (!pzoom) {
-    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 0.1, contain: 'outside' });
+    pzoom = Panzoom($mapWrap, { 
+      maxScale: 10, 
+      minScale: 0.1, 
+      contain: 'outside',
+      startScale: 1.0 // 初期状態を実寸にする
+    });
     $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
   }
 
   const applyPosition = () => {
-    pzoom.reset({ animate: false });
+    // 1. 赤枠の配置（生データどおり）
     $mapHighlight.style.left = r.mapX + "px";
     $mapHighlight.style.top = r.mapY + "px";
     $mapHighlight.style.width = r.mapW + "px";
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
+    // 2. 倍率を決定
+    const zoomLevel = 1.4; // 少し引き気味
+
+    // 3. コンテナと赤枠の中心を算出
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
-    const zoomLevel = 1.8; 
+    const targetCenterX = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
+    const targetCenterY = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
 
-    const mx = parseFloat(r.mapX);
-    const my = parseFloat(r.mapY);
-    const mw = parseFloat(r.mapW);
-    const mh = parseFloat(r.mapH);
+    // 4. Panzoomの移動計算（公式ドキュメントに準拠した計算）
+    // scale(1.0) の時の移動量 = (窓の中心) - (ターゲットの中心)
+    const panX = (cw / 2) - targetCenterX;
+    const panY = (ch / 2) - targetCenterY;
 
-    const targetX = (cw / 2) - (mx + mw / 2) * zoomLevel;
-    const targetY = (ch / 2) - (my + mh / 2) * zoomLevel;
-
-    pzoom.zoom(zoomLevel, { animate: false });
-    pzoom.pan(targetX, targetY, { animate: false });
-    $status.textContent = `${r.last4} を表示中`;
+    // 5. 実行。一旦倍率1で中央に寄せ、その直後にズームをかける
+    pzoom.reset({ animate: false });
+    
+    // 実行の確実性を上げるためsetTimeoutを利用
+    setTimeout(() => {
+        pzoom.pan(panX, panY, { animate: false });
+        pzoom.zoom(zoomLevel, { 
+            animate: false,
+            origin: '50% 50%' // コンテナの中心を基準にズーム
+        });
+        $status.textContent = `${r.last4}を表示中 (v${VERSION})`;
+    }, 20);
   };
 
-  if ($mapImg.complete && $mapImg.naturalWidth !== 0) {
-    applyPosition();
-  } else {
-    $mapImg.onload = applyPosition;
-  }
+  if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
 }
 
 $q.oninput = () => { if($q.value.length === 4) search(); };
 
-/* データ読み込み */
 fetch(API_URL + "?t=" + Date.now())
   .then(r => r.json())
   .then(j => {
@@ -206,7 +216,6 @@ fetch(API_URL + "?t=" + Date.now())
       return {...x, code8:c8, last4:c8.slice(-4)};
     });
     $status.textContent = `準備完了（${rows.length}件）`;
-    // 読込時刻を記録
     const now = new Date();
     document.getElementById("loadTime").textContent = `Load: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
   });
