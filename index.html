@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.9.8)</title>
+  <title>商品検索 PRO (v2.9.9)</title>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
@@ -16,24 +16,18 @@
     }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
     #q { flex: 1; font-size: 20px; padding: 12px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
-    #mic { font-size: 20px; width: 55px; border: none; background: #e5e5ea; border-radius: 10px; }
+    #mic { font-size: 20px; width: 55px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
 
     #inlineMapContainer { 
       display: none; flex: 1; position: relative; overflow: hidden; 
       background: #eee; touch-action: none; width: 100vw;
     }
-    #mapWrap { 
-      position: absolute; top: 0; left: 0; transform-origin: 0 0;
-      width: 100vw !important;
-    }
+    #mapWrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; width: 100vw !important; }
     #mapImg { width: 100vw !important; height: auto !important; display: block; pointer-events: none; }
     #mapHighlight { position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4); z-index: 10; box-shadow: 0 0 15px #ff3b30; animation: flash 0.8s infinite alternate; }
     
-    footer {
-      flex-shrink: 0; background: #fff; border-top: 1px solid #ccc; z-index: 110;
-      padding-bottom: env(safe-area-inset-bottom);
-    }
+    footer { flex-shrink: 0; background: #fff; border-top: 1px solid #ccc; z-index: 110; padding-bottom: env(safe-area-inset-bottom); }
     #inlineInfo { padding: 10px 12px; display: flex; align-items: center; gap: 12px; }
     .info-banchi { font-size: 42px; font-weight: 900; color: var(--accent); line-height: 1; }
     .info-name { font-size: 15px; font-weight: bold; line-height: 1.2; color: #000; word-break: break-all; }
@@ -61,7 +55,7 @@
     <div id="resBanchi" class="info-banchi">--</div>
     <div style="flex:1; min-width:0;"><div id="resArea" style="font-size:11px; color:#666; margin-bottom:2px;">エリア</div><div id="resName" class="info-name">商品名</div></div>
   </div>
-  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.8-strict-x-lock</span></div>
+  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.9-mic-revived</span></div>
 </footer>
 
 <script>
@@ -77,6 +71,27 @@ const $infoArea = document.getElementById("inlineInfo");
 const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
+
+/* --- 音声認識：再実装 --- */
+function initMic() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) { alert("このブラウザは音声認識非対応です"); return; }
+  recognition = new SpeechRec(); recognition.lang = 'ja-JP'; recognition.continuous = true;
+  recognition.onresult = (e) => {
+    const text = e.results[e.results.length-1][0].transcript;
+    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+    if(v.length === 4) { $q.value = v; search(); }
+  };
+  recognition.onend = () => { if(isContinuous) recognition.start(); };
+  recognition.onerror = () => { $mic.classList.remove("active"); isContinuous = false; };
+}
+
+$mic.onclick = () => { 
+  if (!recognition) initMic(); 
+  isContinuous = !isContinuous; 
+  if (isContinuous) { recognition.start(); $mic.classList.add("active"); } 
+  else { recognition.stop(); $mic.classList.remove("active"); } 
+};
 
 function search() {
   const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
@@ -103,27 +118,32 @@ function showMap(r) {
 
     if (pzoom) pzoom.destroy();
     
-    // Panzoom初期化：一旦全方向許可して生成
-    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 1, contain: 'outside' });
+    pzoom = Panzoom($mapWrap, { 
+      maxScale: 8, minScale: 1, 
+      contain: 'outside',
+      disablePan: true // ★初期は移動禁止（これで横揺れを根絶）
+    });
 
-    // 【X軸物理ロック】
-    // 拡大していないときは強制的にxを0、そうでないときは自由
-    $mapWrap.parentElement.addEventListener('pointermove', (e) => {
-        if (pzoom.getScale() <= 1) {
-            const currentTransform = pzoom.getPan();
-            if (currentTransform.x !== 0) {
-                pzoom.pan(0, currentTransform.y, { silent: true });
-            }
-        }
+    // 拡大（ズーム）した時だけ移動を許可する
+    $mapWrap.addEventListener('panzoomzoom', (e) => {
+      if (e.detail.scale > 1.05) {
+        pzoom.setOptions({ disablePan: false });
+      } else {
+        pzoom.setOptions({ disablePan: true });
+        pzoom.pan(0, pzoom.getPan().y, { silent: true }); // 横を0に強制
+      }
     });
 
     setTimeout(() => {
         const containerH = $mapArea.clientHeight;
         const highlightY = r.mapY * ratio;
         const offsetY = highlightY - (containerH / 2) + ((r.mapH * ratio) / 2);
-        // ここでもXを0に指定
+        // 位置合わせの瞬間だけ移動を許可して実行
+        pzoom.setOptions({ disablePan: false });
         pzoom.pan(0, -offsetY, { silent: false });
-    }, 100);
+        // すぐに移動禁止に戻す（1倍の時）
+        if(pzoom.getScale() <= 1) pzoom.setOptions({ disablePan: true });
+    }, 150);
   };
   
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
