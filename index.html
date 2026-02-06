@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.7.1)</title>
+  <title>商品検索 PRO (v2.7.2)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
-    body { margin: 0; background: var(--bg); font-family: sans-serif; -webkit-text-size-adjust: 100%; }
+    body { margin: 0; background: var(--bg); font-family: sans-serif; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
     
     header {
       position: sticky; top: 0; z-index: 100; background: #fff;
@@ -23,27 +23,28 @@
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-    /* マップエリア */
+    /* マップエリア：縦持ちでも横幅を強制フィット */
     #inlineMapContainer {
-      display: none; background: #555; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #444; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
     
-    /* mapWrap: 初期状態を画面幅100%にする */
+    /* mapWrap: 親要素の幅(100%)に合わせる */
     #mapWrap { 
-      width: 100%; 
+      width: 100% !important; 
+      height: auto !important;
       transform-origin: 0 0;
     }
     
-    /* 画像そのものを画面幅に強制的に合わせる */
+    /* 画像を「親要素の幅」に100%合わせ、はみ出しを禁止 */
     #mapImg { 
       width: 100% !important; 
+      max-width: 100% !important;
       height: auto !important; 
       display: block; 
       pointer-events: none;
     }
     
-    /* 赤枠の点滅強調 */
     #mapHighlight {
       position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4);
       box-sizing: border-box; z-index: 10;
@@ -55,12 +56,34 @@
       to { opacity: 0.7; transform: scale(1.1); }
     }
     
+    /* 下部情報欄の調整 */
     #inlineInfo {
       position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
-      background: rgba(255,255,255,0.95); padding: 8px 12px; border-top: 1px solid #ddd;
-      display: flex; justify-content: center; align-items: center; gap: 15px;
+      background: rgba(255,255,255,0.95); padding: 10px 12px; border-top: 1px solid #ddd;
+      display: flex; align-items: center; gap: 12px;
     }
-    .info-banchi { font-size: 32px; font-weight: 900; color: var(--accent); }
+    
+    /* 番地：絶対に改行させない。入り切らない場合は文字を小さくする設定 */
+    .info-banchi { 
+      font-size: clamp(24px, 8vw, 36px); 
+      font-weight: 900; 
+      color: var(--accent); 
+      white-space: nowrap; 
+      flex-shrink: 0; 
+    }
+    
+    /* 品名：改行OK */
+    .info-details {
+      flex: 1;
+      min-width: 0; /* 折り返しを正常に動作させるため */
+    }
+    .info-name {
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1.3;
+      word-break: break-all;
+    }
+
     .version-info { max-width: 800px; margin: 5px auto; padding: 0 12px; display: flex; justify-content: space-between; font-size: 10px; color: #abb2bf; }
     main { max-width: 800px; margin: 0 auto; padding: 10px; }
     .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -84,15 +107,15 @@
   </div>
   <div id="inlineInfo">
     <div id="resBanchi" class="info-banchi">---</div>
-    <div>
-      <div id="resArea" style="font-size:12px; color:#666;">エリア</div>
-      <div id="resName" style="font-size:15px; font-weight:bold;">商品名</div>
+    <div class="info-details">
+      <div id="resArea" style="font-size:11px; color:#666;">エリア</div>
+      <div id="resName" class="info-name">商品名</div>
     </div>
   </div>
 </div>
 
 <div class="version-info">
-  <span>v2.7.1-width-fit</span>
+  <span>v2.7.2-fit-and-wrap</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
@@ -112,10 +135,8 @@ const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
 
-/* --- 入力制御 --- */
-function selectAll(el) {
-  setTimeout(() => { el.setSelectionRange(0, 9999); el.select(); }, 10);
-}
+/* --- 全選択 --- */
+function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.select(); }, 10); }
 $q.addEventListener("focus", (e) => selectAll(e.target));
 $q.addEventListener("click", (e) => selectAll(e.target));
 
@@ -147,10 +168,19 @@ function search() {
     document.getElementById("out").innerHTML = ""; 
     showMap(hits[0]); 
     $q.blur();
+  } else if (hits.length > 1) {
+    $mapArea.style.display = "none";
+    document.getElementById("out").innerHTML = hits.map(r => `
+      <div class="card" onclick='showMap(${JSON.stringify(r)})'>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:14px; font-weight:bold;">${r.name}</div>
+          <div style="font-size:24px; font-weight:900; color:#007aff;">${r.banchi}</div>
+        </div>
+      </div>`).join("");
+    $q.blur();
   }
 }
 
-/* --- マップ表示（画面幅フィット版） --- */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -158,20 +188,17 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 1. 画像が画面幅(100%)になった時の縮小率を計算
-    // 画像の本来の幅(1920)に対して、現在の画面幅がいくつかを算出
-    const currentScreenWidth = $mapArea.clientWidth;
-    const ratio = currentScreenWidth / 1920;
+    // 画像が画面幅に縮小されている比率を計算
+    const ratio = $mapArea.clientWidth / 1920;
 
-    // 2. 赤枠を計算した比率で配置
-    // 生の座標に比率を掛けることで、縮小された画像上の正しい位置に来る
+    // 赤枠を比率に合わせて配置
     $mapHighlight.style.left = (r.mapX * ratio) + "px";
     $mapHighlight.style.top = (r.mapY * ratio) + "px";
     $mapHighlight.style.width = (r.mapW * ratio) + "px";
     $mapHighlight.style.height = (r.mapH * ratio) + "px";
     $mapHighlight.style.display = "block";
 
-    // 3. Panzoomのリセット（縮小された状態を「標準(scale 1)」として扱う）
+    // 縦持ち時に全体が収まるよう Panzoom を初期化
     if (pzoom) {
       pzoom.reset({ animate: false });
     } else {
@@ -183,7 +210,7 @@ function showMap(r) {
       $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
     }
     
-    $status.textContent = `${r.last4} を全体表示中`;
+    $status.textContent = `${r.last4} の位置を表示`;
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
