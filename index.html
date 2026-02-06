@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.2.0)</title>
+  <title>商品検索 PRO (v2.3.0)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -17,24 +17,24 @@
       box-shadow: 0 1px 10px rgba(0,0,0,0.1);
     }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
-    #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
+    #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; }
     #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
     /* マップエリア */
     #inlineMapContainer {
-      display: none; background: #eee; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #ddd; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
-    /* panzoomを適用するラッパー。サイズを画像と同一にするのがコツ */
-    #mapWrap { width: 1920px; height: 1358px; cursor: grab; }
-    #mapImg { display: block; user-select: none; width: 1920px; height: 1358px; max-width: none; }
+    /* 座標計算を安定させるためのラッパー */
+    #mapWrap { width: 1920px; height: 1358px; transform-origin: 0 0; }
+    #mapImg { display: block; width: 1920px; height: 1358px; max-width: none; pointer-events: none; }
     
     #mapHighlight {
       position: absolute; border: 8px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 4000px rgba(0,0,0,0.1);
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.15); /* マスク効果 */
     }
     
     #inlineInfo {
@@ -46,8 +46,7 @@
 
     .version-info {
       max-width: 800px; margin: 5px auto; padding: 0 12px;
-      display: flex; justify-content: space-between;
-      font-size: 10px; color: #abb2bf; font-family: monospace;
+      display: flex; justify-content: space-between; font-size: 10px; color: #abb2bf;
     }
 
     main { max-width: 800px; margin: 0 auto; padding: 10px; }
@@ -81,14 +80,14 @@
 </div>
 
 <div class="version-info">
-  <span>v2.2.0-stable</span>
+  <span>v2.3.0-final-adjust</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
 <main id="out"></main>
 
 <script>
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 
 let rows = [];
@@ -127,7 +126,6 @@ if (SpeechRec) {
   };
 }
 
-/* 検索 */
 function search() {
   const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
   $q.value = val;
@@ -150,7 +148,7 @@ function search() {
   $q.blur();
 }
 
-/* マップ表示（Panzoom内部座標同期版） */
+/* マップ表示（座標オフセット完全補正版） */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -159,48 +157,48 @@ function showMap(r) {
 
   if (!pzoom) {
     pzoom = Panzoom($mapWrap, { 
-      maxScale: 10, 
+      maxScale: 5, 
       minScale: 0.1, 
-      contain: 'outside',
-      startScale: 1.0 // 初期状態を実寸にする
+      contain: 'outside'
     });
     $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
   }
 
   const applyPosition = () => {
-    // 1. 赤枠の配置（生データどおり）
+    // 1. 赤枠の配置
     $mapHighlight.style.left = r.mapX + "px";
     $mapHighlight.style.top = r.mapY + "px";
     $mapHighlight.style.width = r.mapW + "px";
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
-    // 2. 倍率を決定
-    const zoomLevel = 1.4; // 少し引き気味
+    // 2. 倍率を「さらに引き気味（1.2倍）」に設定
+    const zoomLevel = 1.2; 
 
-    // 3. コンテナと赤枠の中心を算出
+    // 3. 中心計算
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
-    const targetCenterX = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
-    const targetCenterY = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
+    
+    // ターゲット（赤枠）の中心座標
+    const tx = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
+    const ty = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
 
-    // 4. Panzoomの移動計算（公式ドキュメントに準拠した計算）
-    // scale(1.0) の時の移動量 = (窓の中心) - (ターゲットの中心)
-    const panX = (cw / 2) - targetCenterX;
-    const panY = (ch / 2) - targetCenterY;
+    // 4. 移動量の算出
+    // 「窓の中心」から「ターゲットの中心×倍率」を引く
+    const panX = (cw / 2) - (tx * zoomLevel);
+    const panY = (ch / 2) - (ty * zoomLevel);
 
-    // 5. 実行。一旦倍率1で中央に寄せ、その直後にズームをかける
+    // 5. 実行
     pzoom.reset({ animate: false });
     
-    // 実行の確実性を上げるためsetTimeoutを利用
     setTimeout(() => {
+        // 先にズームして座標系を確定させる
+        pzoom.zoom(zoomLevel, { animate: false });
+        // その後に計算した絶対座標へ移動
         pzoom.pan(panX, panY, { animate: false });
-        pzoom.zoom(zoomLevel, { 
-            animate: false,
-            origin: '50% 50%' // コンテナの中心を基準にズーム
-        });
+        
         $status.textContent = `${r.last4}を表示中 (v${VERSION})`;
-    }, 20);
+    }, 10);
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
