@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.6.0)</title>
+  <title>商品検索 PRO (v2.6.1)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -19,34 +19,30 @@
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
     #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
     
-    /* マップエリア：はみ出しを絶対に隠す */
+    /* マイクボタン復活 */
+    #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
+    #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
     #inlineMapContainer {
       display: none; background: #333; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
     
-    /* mapWrap: ここで画像を強制的に1920pxの実寸にする */
+    /* 画像サイズを1920pxに完全固定 */
     #mapWrap { 
-      width: 1920px !important; 
-      height: 1358px !important; 
-      transform-origin: 0 0;
-      position: absolute;
-      top: 0;
-      left: 0;
+      width: 1920px !important; height: 1358px !important; 
+      transform-origin: 0 0; position: absolute; top: 0; left: 0;
     }
-    
     #mapImg { 
-      width: 1920px !important; 
-      height: 1358px !important; 
-      max-width: none !important; 
-      min-width: 1920px !important;
-      display: block; 
+      width: 1920px !important; height: 1358px !important; 
+      max-width: none !important; min-width: 1920px !important; display: block; 
     }
     
     #mapHighlight {
       position: absolute; border: 10px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 5000px rgba(0,0,0,0.4); /* 周囲を暗くして強調 */
+      box-shadow: 0 0 0 5000px rgba(0,0,0,0.4);
     }
     
     #inlineInfo {
@@ -63,7 +59,10 @@
 
 <body>
 <header>
-  <div class="row"><input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="4桁入力" autocomplete="off" /></div>
+  <div class="row">
+    <input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="4桁入力" autocomplete="off" />
+    <button id="mic">🎤</button>
+  </div>
   <div id="status" class="status-bar">データ読込中...</div>
 </header>
 
@@ -81,19 +80,45 @@
   </div>
 </div>
 
-<div class="version-info"><span>v2.6.0-force-fix</span><span id="loadTime">Load: --:--:--</span></div>
+<div class="version-info">
+  <span>v2.6.1-mic-restored</span>
+  <span id="loadTime">Load: --:--:--</span>
+</div>
+
 <main id="out"></main>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 let rows = [];
 let pzoom = null;
+let isContinuous = false;
 
 const $q = document.getElementById("q");
+const $mic = document.getElementById("mic");
+const $status = document.getElementById("status");
 const $mapArea = document.getElementById("inlineMapContainer");
 const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
+
+/* 音声認識エンジンの設定 */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRec) {
+  const recognition = new SpeechRec();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.onresult = (e) => {
+    const text = e.results[e.results.length-1][0].transcript;
+    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+    if(v.length === 4) { $q.value = v; search(); }
+  };
+  recognition.onend = () => { if(isContinuous) recognition.start(); };
+  $mic.onclick = () => {
+    isContinuous = !isContinuous;
+    if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
+    else { recognition.stop(); $mic.classList.remove("active"); }
+  };
+}
 
 function search() {
   const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
@@ -101,6 +126,16 @@ function search() {
   if(val.length !== 4) return;
   const hits = rows.filter(r => r.last4 === val);
   if (hits.length === 1) { document.getElementById("out").innerHTML = ""; showMap(hits[0]); }
+  else if (hits.length > 1) {
+    $mapArea.style.display = "none";
+    document.getElementById("out").innerHTML = hits.map(r => `
+      <div class="card" style="background:#fff; border-radius:12px; padding:12px; margin-bottom:8px;" onclick='showMap(${JSON.stringify(r)})'>
+        <div style="display:flex; justify-content:space-between;">
+          <div><div style="font-size:15px; font-weight:bold;">${r.name}</div></div>
+          <div style="font-size:24px; font-weight:900; color:#007aff;">${r.banchi}</div>
+        </div>
+      </div>`).join("");
+  }
   $q.blur();
 }
 
@@ -111,33 +146,28 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 1. 赤枠の生座標セット
     $mapHighlight.style.left = r.mapX + "px";
     $mapHighlight.style.top = r.mapY + "px";
     $mapHighlight.style.width = r.mapW + "px";
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
-    // 2. 窓のサイズと倍率
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
-    const zoomLevel = 0.8; // ご希望の0.8倍
+    const zoomLevel = 0.8; 
 
-    // 3. ターゲットの中心を計算
     const tx = parseFloat(r.mapX) + (parseFloat(r.mapW) / 2);
     const ty = parseFloat(r.mapY) + (parseFloat(r.mapH) / 2);
 
-    // 4. 強制的に中央へ移動させるCSS値
     const moveX = (cw / 2) - (tx * zoomLevel);
     const moveY = (ch / 2) - (ty * zoomLevel);
 
-    // 5. Transformを直接実行
     $mapWrap.style.transition = "none";
     $mapWrap.style.transform = `translate(${moveX}px, ${moveY}px) scale(${zoomLevel})`;
 
-    // Panzoomの初期化（検索後に手動で動かせるようにする）
     if (!pzoom) {
       pzoom = Panzoom($mapWrap, { contain: false, maxScale: 5 });
+      $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
     }
   };
 
@@ -145,13 +175,22 @@ function showMap(r) {
 }
 
 $q.oninput = () => { if($q.value.length === 4) search(); };
-fetch(API_URL + "?t=" + Date.now()).then(r => r.json()).then(j => {
-  rows = j.rows.map(x => {
-    const c8 = (x.code8||"").toString().padStart(8,"0");
-    return {...x, code8:c8, last4:c8.slice(-4)};
+
+/* データ読み込みの修正 */
+fetch(API_URL + "?t=" + Date.now())
+  .then(res => res.json())
+  .then(j => {
+    rows = j.rows.map(x => {
+      const c8 = (x.code8||"").toString().padStart(8,"0");
+      return {...x, code8:c8, last4:c8.slice(-4)};
+    });
+    $status.textContent = `準備完了（${rows.length}件）`;
+    document.getElementById("loadTime").textContent = `Load: ${new Date().toLocaleTimeString()}`;
+  })
+  .catch(err => {
+    $status.textContent = "データ読み込み失敗";
+    console.error(err);
   });
-  document.getElementById("loadTime").textContent = `Load: ${new Date().toLocaleTimeString()}`;
-});
 </script>
 </body>
 </html>
