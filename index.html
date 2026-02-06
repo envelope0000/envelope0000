@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.7.0)</title>
+  <title>商品検索 PRO (v2.7.1)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -23,29 +23,36 @@
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-    /* マップエリア：全体が見えるように背景を少し暗めに */
+    /* マップエリア */
     #inlineMapContainer {
-      display: none; background: #8e8e93; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #555; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
     
-    /* 全体表示用に画像をフィットさせる設定 */
+    /* mapWrap: 初期状態を画面幅100%にする */
     #mapWrap { 
-      width: 1920px; height: 1358px; 
-      transform-origin: 0 0; position: absolute; top: 0; left: 0;
+      width: 100%; 
+      transform-origin: 0 0;
     }
-    #mapImg { width: 1920px; height: 1358px; display: block; pointer-events: none; }
     
-    /* 赤枠をより目立たせる（点滅アニメーション追加） */
+    /* 画像そのものを画面幅に強制的に合わせる */
+    #mapImg { 
+      width: 100% !important; 
+      height: auto !important; 
+      display: block; 
+      pointer-events: none;
+    }
+    
+    /* 赤枠の点滅強調 */
     #mapHighlight {
-      position: absolute; border: 12px solid #ff3b30; background: rgba(255,59,48,0.4);
+      position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 20px #ff3b30;
+      box-shadow: 0 0 15px #ff3b30;
       animation: flash 0.8s infinite alternate;
     }
     @keyframes flash {
-      from { opacity: 1; border-width: 12px; }
-      to { opacity: 0.6; border-width: 6px; }
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0.7; transform: scale(1.1); }
     }
     
     #inlineInfo {
@@ -85,7 +92,7 @@
 </div>
 
 <div class="version-info">
-  <span>v2.7.0-overview-mode</span>
+  <span>v2.7.1-width-fit</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
@@ -141,20 +148,9 @@ function search() {
     showMap(hits[0]); 
     $q.blur();
   }
-  else if (hits.length > 1) {
-    $mapArea.style.display = "none";
-    document.getElementById("out").innerHTML = hits.map(r => `
-      <div class="card" onclick='showMap(${JSON.stringify(r)})'>
-        <div style="display:flex; justify-content:space-between;">
-          <div><div style="font-size:15px; font-weight:bold;">${r.name}</div></div>
-          <div style="font-size:24px; font-weight:900; color:#007aff;">${r.banchi}</div>
-        </div>
-      </div>`).join("");
-    $q.blur();
-  }
 }
 
-/* --- マップ表示（全体俯瞰モード） --- */
+/* --- マップ表示（画面幅フィット版） --- */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -162,29 +158,32 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 赤枠セット
-    $mapHighlight.style.left = r.mapX + "px";
-    $mapHighlight.style.top = r.mapY + "px";
-    $mapHighlight.style.width = r.mapW + "px";
-    $mapHighlight.style.height = r.mapH + "px";
+    // 1. 画像が画面幅(100%)になった時の縮小率を計算
+    // 画像の本来の幅(1920)に対して、現在の画面幅がいくつかを算出
+    const currentScreenWidth = $mapArea.clientWidth;
+    const ratio = currentScreenWidth / 1920;
+
+    // 2. 赤枠を計算した比率で配置
+    // 生の座標に比率を掛けることで、縮小された画像上の正しい位置に来る
+    $mapHighlight.style.left = (r.mapX * ratio) + "px";
+    $mapHighlight.style.top = (r.mapY * ratio) + "px";
+    $mapHighlight.style.width = (r.mapW * ratio) + "px";
+    $mapHighlight.style.height = (r.mapH * ratio) + "px";
     $mapHighlight.style.display = "block";
 
-    // 画面幅に合わせて「全体」が入る倍率を自動計算
-    const cw = $mapArea.clientWidth;
-    const ch = $mapArea.clientHeight;
-    // 1920pxの画像が画面幅にぴったり収まる倍率
-    const fitScale = cw / 1920;
-
-    // 画像を左上に置いて、画面幅にフィットさせる
-    $mapWrap.style.transition = "none";
-    $mapWrap.style.transform = `translate(0px, 0px) scale(${fitScale})`;
-
-    if (!pzoom) {
-      pzoom = Panzoom($mapWrap, { contain: 'outside', maxScale: 5 });
+    // 3. Panzoomのリセット（縮小された状態を「標準(scale 1)」として扱う）
+    if (pzoom) {
+      pzoom.reset({ animate: false });
+    } else {
+      pzoom = Panzoom($mapWrap, { 
+        maxScale: 10,
+        minScale: 1,
+        contain: 'outside'
+      });
       $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
     }
     
-    $status.textContent = `${r.last4} の位置を全体図で表示`;
+    $status.textContent = `${r.last4} を全体表示中`;
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
@@ -200,7 +199,6 @@ fetch(API_URL + "?t=" + Date.now())
       return {...x, code8:c8, last4:c8.slice(-4)};
     });
     $status.textContent = `準備完了（${rows.length}件）`;
-    document.getElementById("loadTime").textContent = `Load: ${new Date().toLocaleTimeString()}`;
   });
 </script>
 </body>
