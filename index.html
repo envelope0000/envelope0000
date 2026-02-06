@@ -3,70 +3,72 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品コード検索 PRO (Ultra Stable)</title>
+  <title>商品検索 PRO (Center-Fixed)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
-    body { margin: 0; background: var(--bg); font-family: sans-serif; }
+    body { margin: 0; background: var(--bg); font-family: sans-serif; -webkit-text-size-adjust: 100%; }
     
     header {
       position: sticky; top: 0; z-index: 100; background: #fff;
-      padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
+      padding: calc(10px + env(safe-area-inset-top)) 12px 12px;
       box-shadow: 0 1px 10px rgba(0,0,0,0.1);
     }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
-    #q { flex: 1; font-size: 22px; padding: 12px; border-radius: 12px; border: 2px solid #d1d1d6; outline: none; }
-    #mic { font-size: 22px; width: 60px; border: none; background: #e5e5ea; border-radius: 12px; cursor: pointer; }
+    #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
+    #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-    /* ===== マップエリア（背景を白に戻し、視認性向上） ===== */
+    /* マップエリア */
     #inlineMapContainer {
       display: none; background: #fff; border-bottom: 1px solid #d1d1d6;
-      height: 450px; position: relative; overflow: hidden; touch-action: none;
+      height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
     #mapWrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-    #mapImg { display: block; user-select: none; width: 1920px !important; height: auto !important; }
+    #mapImg { display: block; user-select: none; width: 1920px !important; height: 1358px !important; max-width: none !important; }
     
     #mapHighlight {
       position: absolute; border: 6px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 4000px rgba(0,0,0,0.2); /* 周りを少し暗くして強調 */
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.1); /* ほんの少し周りを暗く */
     }
     
     #inlineInfo {
       position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
-      background: rgba(255,255,255,0.9); padding: 12px; border-top: 1px solid #ddd;
-      display: flex; justify-content: center; align-items: center; gap: 20px;
+      background: rgba(255,255,255,0.95); padding: 8px 12px; border-top: 1px solid #ddd;
+      display: flex; justify-content: center; align-items: center; gap: 15px;
     }
-    .info-banchi { font-size: 42px; font-weight: 900; color: var(--accent); }
+    .info-banchi { font-size: 32px; font-weight: 900; color: var(--accent); }
 
-    main { max-width: 800px; margin: 0 auto; padding: 12px; }
-    .card { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); cursor: pointer; }
-    .card-banchi { font-size: 28px; font-weight: 900; color: var(--accent); }
+    main { max-width: 800px; margin: 0 auto; padding: 10px; }
+    .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .card-banchi { font-size: 24px; font-weight: 900; color: var(--accent); }
+    .status-bar { max-width: 800px; margin: 5px auto; font-size: 11px; color: #8e8e93; font-weight: bold; }
   </style>
 </head>
 
 <body>
 <header>
   <div class="row">
-    <input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="下4桁入力" autocomplete="off" />
+    <input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="4桁入力" autocomplete="off" />
     <button id="mic">🎤</button>
   </div>
-  <div id="status" class="meta" style="max-width:800px; margin:8px auto 0; font-size:12px; color:#8e8e93;">読み込み中...</div>
+  <div id="status" class="status-bar">データ読込中...</div>
 </header>
 
 <div id="inlineMapContainer">
   <div id="mapWrap">
-    <img id="mapImg" src="map.png" /> <div id="mapHighlight"></div>
+    <img id="mapImg" src="map.png" />
+    <div id="mapHighlight"></div>
   </div>
   <div id="inlineInfo">
     <div id="resBanchi" class="info-banchi">---</div>
     <div>
-      <div id="resArea" style="font-size:14px; color:#666;">エリア</div>
-      <div id="resName" style="font-size:18px; font-weight:bold;">商品名</div>
+      <div id="resArea" style="font-size:12px; color:#666;">エリア</div>
+      <div id="resName" style="font-size:15px; font-weight:bold;">商品名</div>
     </div>
   </div>
 </div>
@@ -93,7 +95,7 @@ function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.se
 $q.addEventListener("focus", (e) => selectAll(e.target));
 $q.addEventListener("click", (e) => selectAll(e.target));
 
-/* --- 音声認識 --- */
+/* --- 音声認識（連続） --- */
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRec) {
   const recognition = new SpeechRec();
@@ -107,8 +109,8 @@ if (SpeechRec) {
   recognition.onend = () => { if(isContinuous) recognition.start(); };
   $mic.onclick = () => {
     isContinuous = !isContinuous;
-    if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
-    else { recognition.stop(); $mic.classList.remove("active"); }
+    if (isContinuous) { recognition.start(); $mic.classList.add("active"); $status.textContent="連続音声入力中..."; }
+    else { recognition.stop(); $mic.classList.remove("active"); $status.textContent="音声を停止しました"; }
   };
 }
 
@@ -124,18 +126,20 @@ function search() {
     $out.innerHTML = hits.map(r => `
       <div class="card" onclick='showMap(${JSON.stringify(r)})'>
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div><div style="color:#666; font-size:12px;">${r.area}</div><div style="font-size:16px; font-weight:bold;">${r.name}</div></div>
+          <div><div style="color:#666; font-size:11px;">${r.area}</div><div style="font-size:15px; font-weight:bold;">${r.name}</div></div>
           <div class="card-banchi">${r.banchi}</div>
         </div>
       </div>`).join("");
+    $status.textContent = "候補から選んでください";
   } else {
     $mapArea.style.display = "none";
-    $out.innerHTML = `<div class="warn">「${val}」は見つかりません</div>`;
+    $out.innerHTML = `<div class="warn" style="text-align:center; padding:20px; color:red; font-weight:bold;">「${val}」は見つかりません</div>`;
+    $status.textContent = "該当なし";
   }
   $q.blur();
 }
 
-/* --- マップ表示（安定化版） --- */
+/* --- マップ表示（ズレ防止・引き気味調整版） --- */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -143,41 +147,58 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   if (!pzoom) {
-    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 0.1, contain: 'outside' });
+    pzoom = Panzoom($mapWrap, { 
+      maxScale: 8, 
+      minScale: 0.1, 
+      contain: 'outside'
+    });
     $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
   }
 
   const applyPosition = () => {
+    // 毎回リセットして計算の起点（座標0,0 倍率1）を確定させる
+    pzoom.reset({ animate: false });
+
+    // 1. 赤枠の配置
     $mapHighlight.style.left = r.mapX + "px";
     $mapHighlight.style.top = r.mapY + "px";
     $mapHighlight.style.width = r.mapW + "px";
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
+    // 2. 画面サイズ取得
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
     
-    // PC/スマホ共通のズーム倍率
-    const zoomLevel = cw > 800 ? 1.5 : 2.5;
+    // 3. 倍率を「引き気味」に固定（1.8倍）
+    const zoomLevel = 1.8; 
 
-    // 数値として確実に計算
+    // 4. 数値に変換して中心を計算（画像の1920px空間基準）
     const mx = parseFloat(r.mapX);
     const my = parseFloat(r.mapY);
     const mw = parseFloat(r.mapW);
     const mh = parseFloat(r.mapH);
 
-    const targetX = (cw / 2) - (mx + mw / 2) * zoomLevel;
-    const targetY = (ch / 2) - (my + mh / 2) * zoomLevel;
+    const centerX = mx + (mw / 2);
+    const centerY = my + (mh / 2);
 
+    // 5. 中央に持ってくるための移動量を計算
+    const targetX = (cw / 2) - (centerX * zoomLevel);
+    const targetY = (ch / 2) - (centerY * zoomLevel);
+
+    // 6. ズームしてから移動を実行
     pzoom.zoom(zoomLevel, { animate: false });
     pzoom.pan(targetX, targetY, { animate: false });
+    
+    $status.textContent = `${r.last4} (${r.banchi}) を表示中`;
   };
 
-  // 画像が読み込まれるのを待ってから配置
   if ($mapImg.complete && $mapImg.naturalWidth !== 0) {
     applyPosition();
   } else {
     $mapImg.onload = applyPosition;
+    // キャッシュ対策でsrcを更新
+    if(!$mapImg.src.includes('map.png')) $mapImg.src = "map.png";
   }
 }
 
