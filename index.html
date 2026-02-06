@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.5.0)</title>
+  <title>商品検索 PRO (v2.6.0)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -18,23 +18,35 @@
     }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
     #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
-    #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
-    #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-
-    /* マップエリア */
+    
+    /* マップエリア：はみ出しを絶対に隠す */
     #inlineMapContainer {
-      display: none; background: #bbb; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #333; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
-    /* transform-originを左上に固定(超重要) */
-    #mapWrap { width: 1920px; height: 1358px; transform-origin: 0 0; }
-    #mapImg { display: block; width: 1920px; height: 1358px; max-width: none !important; pointer-events: none; }
+    
+    /* mapWrap: ここで画像を強制的に1920pxの実寸にする */
+    #mapWrap { 
+      width: 1920px !important; 
+      height: 1358px !important; 
+      transform-origin: 0 0;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    
+    #mapImg { 
+      width: 1920px !important; 
+      height: 1358px !important; 
+      max-width: none !important; 
+      min-width: 1920px !important;
+      display: block; 
+    }
     
     #mapHighlight {
-      position: absolute; border: 8px solid #ff3b30; background: rgba(255,59,48,0.3);
+      position: absolute; border: 10px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 4000px rgba(0,0,0,0.2);
+      box-shadow: 0 0 0 5000px rgba(0,0,0,0.4); /* 周囲を暗くして強調 */
     }
     
     #inlineInfo {
@@ -43,25 +55,15 @@
       display: flex; justify-content: center; align-items: center; gap: 15px;
     }
     .info-banchi { font-size: 32px; font-weight: 900; color: var(--accent); }
-
-    .version-info {
-      max-width: 800px; margin: 5px auto; padding: 0 12px;
-      display: flex; justify-content: space-between; font-size: 10px; color: #abb2bf;
-    }
-
+    .version-info { max-width: 800px; margin: 5px auto; padding: 0 12px; display: flex; justify-content: space-between; font-size: 10px; color: #abb2bf; }
     main { max-width: 800px; margin: 0 auto; padding: 10px; }
-    .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .card-banchi { font-size: 24px; font-weight: 900; color: var(--accent); }
     .status-bar { max-width: 800px; margin: 5px auto; font-size: 11px; color: #8e8e93; font-weight: bold; }
   </style>
 </head>
 
 <body>
 <header>
-  <div class="row">
-    <input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="4桁入力" autocomplete="off" />
-    <button id="mic">🎤</button>
-  </div>
+  <div class="row"><input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="4桁入力" autocomplete="off" /></div>
   <div id="status" class="status-bar">データ読込中...</div>
 </header>
 
@@ -79,76 +81,29 @@
   </div>
 </div>
 
-<div class="version-info">
-  <span>v2.5.0-absolute-center</span>
-  <span id="loadTime">Load: --:--:--</span>
-</div>
-
+<div class="version-info"><span>v2.6.0-force-fix</span><span id="loadTime">Load: --:--:--</span></div>
 <main id="out"></main>
 
 <script>
-const VERSION = "2.5.0";
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
-
 let rows = [];
 let pzoom = null;
-let isContinuous = false;
 
 const $q = document.getElementById("q");
-const $mic = document.getElementById("mic");
-const $out = document.getElementById("out");
-const $status = document.getElementById("status");
 const $mapArea = document.getElementById("inlineMapContainer");
 const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
-
-function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.select(); }, 10); }
-$q.addEventListener("focus", (e) => selectAll(e.target));
-$q.addEventListener("click", (e) => selectAll(e.target));
-
-/* 音声認識 */
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRec) {
-  const recognition = new SpeechRec();
-  recognition.lang = 'ja-JP';
-  recognition.continuous = true;
-  recognition.onresult = (e) => {
-    const text = e.results[e.results.length-1][0].transcript;
-    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
-    if(v.length === 4) { $q.value = v; search(); }
-  };
-  recognition.onend = () => { if(isContinuous) recognition.start(); };
-  $mic.onclick = () => {
-    isContinuous = !isContinuous;
-    if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
-    else { recognition.stop(); $mic.classList.remove("active"); }
-  };
-}
 
 function search() {
   const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
   $q.value = val;
   if(val.length !== 4) return;
   const hits = rows.filter(r => r.last4 === val);
-  if (hits.length === 1) { $out.innerHTML = ""; showMap(hits[0]); }
-  else if (hits.length > 1) {
-    $mapArea.style.display = "none";
-    $out.innerHTML = hits.map(r => `
-      <div class="card" onclick='showMap(${JSON.stringify(r)})'>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div><div style="color:#666; font-size:11px;">${r.area}</div><div style="font-size:15px; font-weight:bold;">${r.name}</div></div>
-          <div class="card-banchi">${r.banchi}</div>
-        </div>
-      </div>`).join("");
-  } else {
-    $mapArea.style.display = "none";
-    $out.innerHTML = `<div class="warn" style="text-align:center; padding:20px; color:red; font-weight:bold;">「${val}」なし</div>`;
-  }
+  if (hits.length === 1) { document.getElementById("out").innerHTML = ""; showMap(hits[0]); }
   $q.blur();
 }
 
-/* マップ表示（CSSダイレクト補正版） */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -156,63 +111,47 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 1. 赤枠の配置
+    // 1. 赤枠の生座標セット
     $mapHighlight.style.left = r.mapX + "px";
     $mapHighlight.style.top = r.mapY + "px";
     $mapHighlight.style.width = r.mapW + "px";
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
-    // 2. 数学的中央寄せ（0.8倍設定）
+    // 2. 窓のサイズと倍率
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
-    const zoomLevel = 0.8; 
-    
-    // ターゲットの中心点
+    const zoomLevel = 0.8; // ご希望の0.8倍
+
+    // 3. ターゲットの中心を計算
     const tx = parseFloat(r.mapX) + (parseFloat(r.mapW) / 2);
     const ty = parseFloat(r.mapY) + (parseFloat(r.mapH) / 2);
 
-    // ライブラリをバイパスするダイレクト座標計算
+    // 4. 強制的に中央へ移動させるCSS値
     const moveX = (cw / 2) - (tx * zoomLevel);
     const moveY = (ch / 2) - (ty * zoomLevel);
 
-    // スタイルを直接上書きして中央に叩き込む
+    // 5. Transformを直接実行
     $mapWrap.style.transition = "none";
     $mapWrap.style.transform = `translate(${moveX}px, ${moveY}px) scale(${zoomLevel})`;
 
-    // 3. Panzoomのインスタンス化（初回のみ）
-    // 以降、手動での拡大縮小を可能にするが、検索時は上記の強制移動が優先される
+    // Panzoomの初期化（検索後に手動で動かせるようにする）
     if (!pzoom) {
-      pzoom = Panzoom($mapWrap, { 
-        contain: false, 
-        maxScale: 5,
-        setTransform: (el, { x, y, scale }) => {
-          // 手動操作時もtransform-originを崩さないためのフック
-          el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-        }
-      });
-      $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
+      pzoom = Panzoom($mapWrap, { contain: false, maxScale: 5 });
     }
-    
-    $status.textContent = `${r.last4} 中央固定完了 (v${VERSION})`;
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
 }
 
 $q.oninput = () => { if($q.value.length === 4) search(); };
-
-fetch(API_URL + "?t=" + Date.now())
-  .then(r => r.json())
-  .then(j => {
-    rows = j.rows.map(x => {
-      const c8 = (x.code8||"").toString().padStart(8,"0");
-      return {...x, code8:c8, last4:c8.slice(-4)};
-    });
-    $status.textContent = `準備完了（${rows.length}件）`;
-    const now = new Date();
-    document.getElementById("loadTime").textContent = `Load: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+fetch(API_URL + "?t=" + Date.now()).then(r => r.json()).then(j => {
+  rows = j.rows.map(x => {
+    const c8 = (x.code8||"").toString().padStart(8,"0");
+    return {...x, code8:c8, last4:c8.slice(-4)};
   });
+  document.getElementById("loadTime").textContent = `Load: ${new Date().toLocaleTimeString()}`;
+});
 </script>
 </body>
 </html>
