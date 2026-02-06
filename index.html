@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.3.0)</title>
+  <title>商品検索 PRO (v2.4.0)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -17,24 +17,24 @@
       box-shadow: 0 1px 10px rgba(0,0,0,0.1);
     }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
-    #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; }
+    #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
     #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
     #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
     /* マップエリア */
     #inlineMapContainer {
-      display: none; background: #ddd; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #ccc; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
-    /* 座標計算を安定させるためのラッパー */
+    /* 1920x1358の実寸空間を定義 */
     #mapWrap { width: 1920px; height: 1358px; transform-origin: 0 0; }
-    #mapImg { display: block; width: 1920px; height: 1358px; max-width: none; pointer-events: none; }
+    #mapImg { display: block; width: 1920px; height: 1358px; max-width: none !important; pointer-events: none; }
     
     #mapHighlight {
       position: absolute; border: 8px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 4000px rgba(0,0,0,0.15); /* マスク効果 */
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.15); /* ターゲット以外を暗く */
     }
     
     #inlineInfo {
@@ -80,14 +80,14 @@
 </div>
 
 <div class="version-info">
-  <span>v2.3.0-final-adjust</span>
+  <span>v2.4.0-math-fixed</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
 <main id="out"></main>
 
 <script>
-const VERSION = "2.3.0";
+const VERSION = "2.4.0";
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 
 let rows = [];
@@ -107,7 +107,7 @@ function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.se
 $q.addEventListener("focus", (e) => selectAll(e.target));
 $q.addEventListener("click", (e) => selectAll(e.target));
 
-/* 音声認識（連続） */
+/* 音声認識 */
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRec) {
   const recognition = new SpeechRec();
@@ -148,7 +148,7 @@ function search() {
   $q.blur();
 }
 
-/* マップ表示（座標オフセット完全補正版） */
+/* マップ表示（数学的中央補正版） */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -159,7 +159,7 @@ function showMap(r) {
     pzoom = Panzoom($mapWrap, { 
       maxScale: 5, 
       minScale: 0.1, 
-      contain: 'outside'
+      contain: false // 自由な移動を許可
     });
     $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
   }
@@ -172,32 +172,27 @@ function showMap(r) {
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
-    // 2. 倍率を「さらに引き気味（1.2倍）」に設定
-    const zoomLevel = 1.2; 
+    // 2. 倍率を「0.8倍」に設定
+    const zoomLevel = 0.8; 
 
-    // 3. 中心計算
+    // 3. コンテナ（表示窓）とターゲット（赤枠）の中心を算出
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
     
-    // ターゲット（赤枠）の中心座標
-    const tx = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
-    const ty = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
+    const targetCenterX = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
+    const targetCenterY = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
 
-    // 4. 移動量の算出
-    // 「窓の中心」から「ターゲットの中心×倍率」を引く
-    const panX = (cw / 2) - (tx * zoomLevel);
-    const panY = (ch / 2) - (ty * zoomLevel);
+    // 4. 移動量の算出（数学的中央寄せ）
+    const panX = (cw / 2) - (targetCenterX * zoomLevel);
+    const panY = (ch / 2) - (targetCenterY * zoomLevel);
 
     // 5. 実行
     pzoom.reset({ animate: false });
     
     setTimeout(() => {
-        // 先にズームして座標系を確定させる
         pzoom.zoom(zoomLevel, { animate: false });
-        // その後に計算した絶対座標へ移動
         pzoom.pan(panX, panY, { animate: false });
-        
-        $status.textContent = `${r.last4}を表示中 (v${VERSION})`;
+        $status.textContent = `${r.last4} 表示中 (Zoom:0.8 / v${VERSION})`;
     }, 10);
   };
 
