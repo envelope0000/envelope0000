@@ -2,318 +2,196 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>商品コード下4桁検索</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>商品コード検索 PRO (Ultra Stable)</title>
+  
+  <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
   <style>
-    :root { --pad: 14px; --gap: 10px; }
-
-    body{
-      margin:0;
-      background:#f6f7f8;
-      font-family:-apple-system, system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
-      overflow-x: hidden;
+    :root { --accent: #007aff; --bg: #f2f2f7; }
+    body { margin: 0; background: var(--bg); font-family: sans-serif; }
+    
+    header {
+      position: sticky; top: 0; z-index: 100; background: #fff;
+      padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
+      box-shadow: 0 1px 10px rgba(0,0,0,0.1);
     }
-    header{
-      position:sticky; top:0; z-index:10;
-      background:#fff;
-      padding:calc(var(--pad) + env(safe-area-inset-top)) var(--pad) var(--pad);
-      box-shadow:0 1px 10px rgba(0,0,0,.06);
+    .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
+    #q { flex: 1; font-size: 22px; padding: 12px; border-radius: 12px; border: 2px solid #d1d1d6; outline: none; }
+    #mic { font-size: 22px; width: 60px; border: none; background: #e5e5ea; border-radius: 12px; cursor: pointer; }
+    #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    /* ===== マップエリア（背景を白に戻し、視認性向上） ===== */
+    #inlineMapContainer {
+      display: none; background: #fff; border-bottom: 1px solid #d1d1d6;
+      height: 450px; position: relative; overflow: hidden; touch-action: none;
     }
-    h1{ font-size:16px; margin:0 0 10px; font-weight:800; }
-
-    .row{ display:flex; gap:var(--gap); align-items:stretch; }
-    #q{
-      flex: 1 1 auto; min-width:0;
-      font-size:22px; padding:12px 14px;
-      border-radius:12px; border:1px solid #d0d7de; outline:none;
-      background:#fff;
-      appearance: none;
-      /* iOSでズームされるのを防ぐため、最低でも16px以上（ここでは22px）を維持 */
+    #mapWrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+    #mapImg { display: block; user-select: none; width: 1920px !important; height: auto !important; }
+    
+    #mapHighlight {
+      position: absolute; border: 6px solid #ff3b30; background: rgba(255,59,48,0.3);
+      box-sizing: border-box; z-index: 10;
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.2); /* 周りを少し暗くして強調 */
     }
-    #q:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.1); }
-
-    button{
-      flex: 0 0 auto;
-      font-size:16px; padding:12px 12px;
-      border-radius:12px; border:1px solid #d0d7de;
-      background:#fff; font-weight:800; white-space:nowrap;
-      -webkit-tap-highlight-color: transparent;
-      cursor: pointer;
+    
+    #inlineInfo {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+      background: rgba(255,255,255,0.9); padding: 12px; border-top: 1px solid #ddd;
+      display: flex; justify-content: center; align-items: center; gap: 20px;
     }
-    #btn{ width:72px; }
-    #mic{ width:56px; transition: all 0.2s; font-size: 20px; }
-    #mic.listening { 
-      background: #ff3b30; 
-      border-color: #ff3b30; 
-      color: #fff;
-      transform: scale(1.1);
-      box-shadow: 0 0 15px rgba(255,59,48,0.4);
-    }
+    .info-banchi { font-size: 42px; font-weight: 900; color: var(--accent); }
 
-    @media (min-width: 768px){ #mic{ display:none !important; } }
-
-    .meta{ margin-top:10px; font-size:12px; color:#57606a; min-height: 1.2em; }
-    main{
-      padding:6px var(--pad);
-      padding-bottom:calc(28px + env(safe-area-inset-bottom));
-    }
-
-    .card{
-      background:#fff; border-radius:16px; padding:14px; margin:12px 0;
-      box-shadow:0 6px 20px rgba(0,0,0,.06);
-      animation: slideUp 0.2s ease-out;
-    }
-    @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-
-    .area{ font-size:14px; color:#57606a; }
-    .name{ font-size:16px; font-weight:800; margin:8px 0 10px; }
-    .code{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#57606a; }
-
-    .banchi{ font-size:48px; font-weight:900; margin:6px 0; line-height:1.05; }
-    .banchi.tap{ text-decoration: underline; text-underline-offset: 6px; color: #007aff; cursor: pointer; }
-    .warn{ color:#b42318; font-size:13px; margin-top:10px; }
-
-    .card.fullscreen{
-      margin:0; border-radius:0;
-      min-height:calc(100vh - 120px);
-      display:flex; flex-direction:column;
-      justify-content:flex-start;
-      padding-top:16px;
-    }
-    .card.fullscreen .banchi{ font-size:72px; }
-
-    /* ===== 配置図モーダル ===== */
-    #mapModal{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:9999; }
-    #mapBox{ position:absolute; inset:12px; background:#fff; border-radius:16px; overflow:hidden; }
-    #mapHeader{ display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #eee; }
-    #mapBody{ height:calc(100% - 44px); overflow:auto; -webkit-overflow-scrolling:touch; }
-    #mapWrap{ position:relative; max-width:100%; }
-    #mapImg{ width:100%; height:auto; display:block; max-width:100%; position:relative; z-index:1; }
-    #mapHighlight{
-      position:absolute; z-index:5; border:4px solid #ff3b30; box-sizing:border-box;
-      background: rgba(255,255,255,0.4); box-shadow: 0 0 0 9999px rgba(0,0,0,.1);
-      pointer-events:none; display:none; opacity:0; transition: opacity 140ms ease;
-    }
-    #mapHighlight.show{ opacity:1; }
-
-    @media (max-width: 380px){
-      :root{ --pad: 12px; --gap: 8px; }
-      #q{ font-size:20px; padding:11px 12px; }
-      button{ padding:11px 10px; }
-      #btn{ width:66px; }
-      #mic{ width:52px; }
-    }
+    main { max-width: 800px; margin: 0 auto; padding: 12px; }
+    .card { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); cursor: pointer; }
+    .card-banchi { font-size: 28px; font-weight: 900; color: var(--accent); }
   </style>
 </head>
 
 <body>
 <header>
-  <h1>下4桁で検索</h1>
   <div class="row">
-    <input id="q" type="tel" inputmode="numeric" maxlength="4"
-           placeholder="7137" autocomplete="off" />
-    <button id="btn" type="button">検索</button>
-    <button id="mic" type="button" aria-label="音声入力">🎤</button>
+    <input id="q" type="tel" inputmode="numeric" maxlength="4" placeholder="下4桁入力" autocomplete="off" />
+    <button id="mic">🎤</button>
   </div>
-  <div id="status" class="meta">読み込み中…</div>
+  <div id="status" class="meta" style="max-width:800px; margin:8px auto 0; font-size:12px; color:#8e8e93;">読み込み中...</div>
 </header>
 
-<main id="out"></main>
-
-<div id="mapModal" aria-hidden="true">
-  <div id="mapBox">
-    <div id="mapHeader">
-      <div id="mapTitle">配置図</div>
-      <button id="mapClose" type="button">閉じる</button>
-    </div>
-    <div id="mapBody">
-      <div id="mapWrap">
-        <img id="mapImg" src="" alt="配置図" />
-        <div id="mapHighlight"></div>
-      </div>
+<div id="inlineMapContainer">
+  <div id="mapWrap">
+    <img id="mapImg" src="map.png" /> <div id="mapHighlight"></div>
+  </div>
+  <div id="inlineInfo">
+    <div id="resBanchi" class="info-banchi">---</div>
+    <div>
+      <div id="resArea" style="font-size:14px; color:#666;">エリア</div>
+      <div id="resName" style="font-size:18px; font-weight:bold;">商品名</div>
     </div>
   </div>
 </div>
 
+<main id="out"></main>
+
 <script>
-/* ===== 基本設定 ===== */
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
-const MAP_IMAGE_URL = "map.png";
-const MAP_W = 1920;
-const MAP_H = 1358;
 
 let rows = [];
-let fullscreenMode = false;
+let pzoom = null;
+let isContinuous = false;
 
 const $q = document.getElementById("q");
-const $btn = document.getElementById("btn");
 const $mic = document.getElementById("mic");
 const $out = document.getElementById("out");
 const $status = document.getElementById("status");
-const $mapModal = document.getElementById("mapModal");
+const $mapArea = document.getElementById("inlineMapContainer");
+const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
 
-/* ===== ユーティリティ ===== */
-function normalize4(v){
-  if(!v) return "";
-  let num = v.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-  num = num.replace(/\D/g, "");
-  return num.slice(-4);
-}
-function pad8(v){ return (v||"").replace(/\D/g,"").padStart(8,"0").slice(-8); }
+function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.select(); }, 10); }
+$q.addEventListener("focus", (e) => selectAll(e.target));
+$q.addEventListener("click", (e) => selectAll(e.target));
 
-/* ===== 全選択の制御 ===== */
-function selectAllText(input) {
-  // iOS/Androidで確実に全選択させるためのセット
-  setTimeout(() => {
-    input.setSelectionRange(0, 9999);
-    input.select();
-  }, 10);
-}
-
-// フォーカス時、クリック時、どちらでも全選択を実行
-$q.addEventListener("focus", (e) => {
-  fullscreenMode = false;
-  selectAllText(e.target);
-});
-$q.addEventListener("click", (e) => {
-  selectAllText(e.target);
-});
-
-/* ===== 音声認識 ===== */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
+/* --- 音声認識 --- */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRec) {
+  const recognition = new SpeechRec();
   recognition.lang = 'ja-JP';
-  
-  recognition.onstart = () => {
-    fullscreenMode = false;
-    $q.value = ""; // 次の入力のためにクリア
-    $mic.classList.add("listening");
-    $status.textContent = "音声聞き取り中...";
+  recognition.continuous = true;
+  recognition.onresult = (e) => {
+    const text = e.results[e.results.length-1][0].transcript;
+    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+    if(v.length === 4) { $q.value = v; search(); }
   };
-
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    const v = normalize4(transcript);
-    if (v.length > 0) {
-      $q.value = v;
-      search();
-    } else {
-      $status.textContent = `数字を認識できませんでした (${transcript})`;
-    }
+  recognition.onend = () => { if(isContinuous) recognition.start(); };
+  $mic.onclick = () => {
+    isContinuous = !isContinuous;
+    if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
+    else { recognition.stop(); $mic.classList.remove("active"); }
   };
-
-  recognition.onerror = () => { $mic.classList.remove("listening"); };
-  recognition.onend = () => { $mic.classList.remove("listening"); };
 }
 
-$mic.onclick = () => {
-  if (!recognition) return alert("ブラウザが音声入力に対応していません");
-  recognition.start();
-};
-
-/* ===== 検索・表示 ===== */
-function search(){
-  const q = normalize4($q.value);
-  $q.value = q;
-  if(q.length !== 4) return;
-
-  const hit = rows.filter(r => r.last4 === q);
-  $status.textContent = `「${q}」の結果: ${hit.length}件`;
-  render(hit, q);
-}
-
-function render(list, q){
-  if(!list.length){
-    $out.innerHTML = `<div class="warn">該当なし（${q}）</div>`;
-    return;
-  }
-
-  if(list.length === 1 && !fullscreenMode){
-    const r = list[0];
-    $out.innerHTML = `
-      <div class="card fullscreen" id="fs">
-        <div class="area">${r.area}</div>
-        <div class="banchi tap" data-info='${JSON.stringify(r)}'>${r.banchi}</div>
-        <div class="name">${r.name}</div>
-        <div class="code">${r.code8}</div>
-        <div style="margin-top:auto; color:#888; font-size:12px; text-align:center; padding:20px;">
-          タップで一覧表示に戻る
+/* --- 検索 --- */
+function search() {
+  const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+  $q.value = val;
+  if(val.length !== 4) return;
+  const hits = rows.filter(r => r.last4 === val);
+  if (hits.length === 1) { $out.innerHTML = ""; showMap(hits[0]); }
+  else if (hits.length > 1) {
+    $mapArea.style.display = "none";
+    $out.innerHTML = hits.map(r => `
+      <div class="card" onclick='showMap(${JSON.stringify(r)})'>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><div style="color:#666; font-size:12px;">${r.area}</div><div style="font-size:16px; font-weight:bold;">${r.name}</div></div>
+          <div class="card-banchi">${r.banchi}</div>
         </div>
-      </div>`;
-    fullscreenMode = true;
-    document.getElementById("fs").onclick = (e) => {
-      if(!e.target.classList.contains('tap')){ 
-        fullscreenMode = false; 
-        render(list, q); 
-      }
-    };
-  } else {
-    fullscreenMode = false;
-    $out.innerHTML = list.map(r => `
-      <div class="card">
-        <div class="area">${r.area}</div>
-        <div class="banchi tap" data-info='${JSON.stringify(r)}'>${r.banchi}</div>
-        <div class="name">${r.name}</div>
-        <div class="code">${r.code8}</div>
       </div>`).join("");
+  } else {
+    $mapArea.style.display = "none";
+    $out.innerHTML = `<div class="warn">「${val}」は見つかりません</div>`;
   }
-
-  document.querySelectorAll(".tap").forEach(el => {
-    el.onclick = (e) => {
-      e.stopPropagation();
-      const r = JSON.parse(el.dataset.info);
-      openMap(r.area, r.banchi, {x:+r.mapX, y:+r.mapY, w:+r.mapW, h:+r.mapH});
-    };
-  });
+  $q.blur();
 }
 
-/* ===== マップ表示 ===== */
-function openMap(area, banchi, rect){
-  document.getElementById("mapTitle").textContent = `配置図 (${area} ${banchi})`;
-  $mapModal.style.display = "block";
-  $mapImg.onload = () => {
-    const r = $mapImg.getBoundingClientRect();
-    const sx = r.width / MAP_W;
-    const sy = r.height / MAP_H;
-    $mapHighlight.style.cssText = `
-      display:block; left:${rect.x * sx}px; top:${rect.y * sy}px;
-      width:${rect.w * sx}px; height:${rect.h * sy}px; opacity:1;
-    `;
-    $mapHighlight.classList.add("show");
+/* --- マップ表示（安定化版） --- */
+function showMap(r) {
+  $mapArea.style.display = "block";
+  document.getElementById("resArea").textContent = r.area;
+  document.getElementById("resName").textContent = r.name;
+  document.getElementById("resBanchi").textContent = r.banchi;
+
+  if (!pzoom) {
+    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 0.1, contain: 'outside' });
+    $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
+  }
+
+  const applyPosition = () => {
+    $mapHighlight.style.left = r.mapX + "px";
+    $mapHighlight.style.top = r.mapY + "px";
+    $mapHighlight.style.width = r.mapW + "px";
+    $mapHighlight.style.height = r.mapH + "px";
+    $mapHighlight.style.display = "block";
+
+    const cw = $mapArea.clientWidth;
+    const ch = $mapArea.clientHeight;
+    
+    // PC/スマホ共通のズーム倍率
+    const zoomLevel = cw > 800 ? 1.5 : 2.5;
+
+    // 数値として確実に計算
+    const mx = parseFloat(r.mapX);
+    const my = parseFloat(r.mapY);
+    const mw = parseFloat(r.mapW);
+    const mh = parseFloat(r.mapH);
+
+    const targetX = (cw / 2) - (mx + mw / 2) * zoomLevel;
+    const targetY = (ch / 2) - (my + mh / 2) * zoomLevel;
+
+    pzoom.zoom(zoomLevel, { animate: false });
+    pzoom.pan(targetX, targetY, { animate: false });
   };
-  $mapImg.src = MAP_IMAGE_URL + "?t=" + Date.now();
+
+  // 画像が読み込まれるのを待ってから配置
+  if ($mapImg.complete && $mapImg.naturalWidth !== 0) {
+    applyPosition();
+  } else {
+    $mapImg.onload = applyPosition;
+  }
 }
 
-document.getElementById("mapClose").onclick = () => { $mapModal.style.display="none"; $mapHighlight.classList.remove("show"); };
+$q.oninput = () => { if($q.value.length === 4) search(); };
 
-/* ===== 入力監視 ===== */
-$q.oninput = () => {
-  const v = normalize4($q.value);
-  if(v.length === 4) {
-    $q.value = v;
-    search();
-    $q.blur(); // 入力完了でキーボードを閉じる
-  }
-};
-$btn.onclick = () => { search(); $q.blur(); };
-
-/* ===== データロード ===== */
 fetch(API_URL + "?t=" + Date.now())
   .then(r => r.json())
   .then(j => {
     rows = j.rows.map(x => {
-      const code8 = pad8(x.code8);
-      return {...x, code8, last4:code8.slice(-4)};
+      const c8 = (x.code8||"").toString().padStart(8,"0");
+      return {...x, code8:c8, last4:c8.slice(-4)};
     });
-    $status.textContent = `読み込み完了：${rows.length}件`;
-  })
-  .catch(() => { $status.textContent = "読み込みエラー"; });
+    $status.textContent = `準備完了（${rows.length}件）`;
+  });
 </script>
 </body>
 </html>
