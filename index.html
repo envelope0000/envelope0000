@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.9.7)</title>
+  <title>商品検索 PRO (v2.9.8)</title>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
@@ -25,7 +25,7 @@
     }
     #mapWrap { 
       position: absolute; top: 0; left: 0; transform-origin: 0 0;
-      width: 100vw !important; will-change: transform;
+      width: 100vw !important;
     }
     #mapImg { width: 100vw !important; height: auto !important; display: block; pointer-events: none; }
     #mapHighlight { position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4); z-index: 10; box-shadow: 0 0 15px #ff3b30; animation: flash 0.8s infinite alternate; }
@@ -61,7 +61,7 @@
     <div id="resBanchi" class="info-banchi">--</div>
     <div style="flex:1; min-width:0;"><div id="resArea" style="font-size:11px; color:#666; margin-bottom:2px;">エリア</div><div id="resName" class="info-name">商品名</div></div>
   </div>
-  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.7-logic-lock</span></div>
+  <div class="meta-info"><span id="status">読込中...</span><span>v2.9.8-strict-x-lock</span></div>
 </footer>
 
 <script>
@@ -77,20 +77,6 @@ const $infoArea = document.getElementById("inlineInfo");
 const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
-
-function initMic() {
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) return;
-  recognition = new SpeechRec(); recognition.lang = 'ja-JP'; recognition.continuous = true;
-  recognition.onresult = (e) => {
-    const text = e.results[e.results.length-1][0].transcript;
-    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
-    if(v.length === 4) { $q.value = v; search(); }
-  };
-  recognition.onend = () => { if(isContinuous) recognition.start(); };
-}
-
-$mic.onclick = () => { if (!recognition) initMic(); isContinuous = !isContinuous; if (isContinuous) { recognition.start(); $mic.classList.add("active"); } else { recognition.stop(); $mic.classList.remove("active"); } };
 
 function search() {
   const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
@@ -110,7 +96,6 @@ function showMap(r) {
   const applyPosition = () => {
     const screenW = window.innerWidth;
     const ratio = screenW / 1920;
-    
     $mapHighlight.style.left = (r.mapX * ratio) + "px";
     $mapHighlight.style.top = (r.mapY * ratio) + "px";
     $mapHighlight.style.width = (r.mapW * ratio) + "px";
@@ -118,27 +103,27 @@ function showMap(r) {
 
     if (pzoom) pzoom.destroy();
     
-    // Panzoomの初期化
-    pzoom = Panzoom($mapWrap, { 
-      maxScale: 8, minScale: 1, 
-      contain: 'outside'
-    });
-    
-    // 【横スライド完全封印ロジック】
-    // ズーム倍率が1倍のときは、横移動(X)を強制的に0に固定する
-    $mapWrap.addEventListener('panzoompan', (e) => {
-      const scale = pzoom.getScale();
-      if (scale <= 1.01) { // ほぼ1倍のとき
-        pzoom.pan(0, e.detail.y, { silent: true });
-      }
+    // Panzoom初期化：一旦全方向許可して生成
+    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 1, contain: 'outside' });
+
+    // 【X軸物理ロック】
+    // 拡大していないときは強制的にxを0、そうでないときは自由
+    $mapWrap.parentElement.addEventListener('pointermove', (e) => {
+        if (pzoom.getScale() <= 1) {
+            const currentTransform = pzoom.getPan();
+            if (currentTransform.x !== 0) {
+                pzoom.pan(0, currentTransform.y, { silent: true });
+            }
+        }
     });
 
     setTimeout(() => {
         const containerH = $mapArea.clientHeight;
         const highlightY = r.mapY * ratio;
         const offsetY = highlightY - (containerH / 2) + ((r.mapH * ratio) / 2);
+        // ここでもXを0に指定
         pzoom.pan(0, -offsetY, { silent: false });
-    }, 150);
+    }, 100);
   };
   
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
