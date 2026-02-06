@@ -3,68 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.7.3)</title>
-  
+  <title>商品検索 PRO (v2.7.4)</title>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
-
   <style>
     :root { --accent: #007aff; --bg: #f2f2f7; }
-    body { margin: 0; background: var(--bg); font-family: sans-serif; -webkit-text-size-adjust: 100%; overflow-x: hidden; position: fixed; width: 100%; }
-    
-    header {
-      position: sticky; top: 0; z-index: 100; background: #fff;
-      padding: calc(10px + env(safe-area-inset-top)) 12px 12px;
-      box-shadow: 0 1px 10px rgba(0,0,0,0.1);
-    }
+    body { margin: 0; background: var(--bg); font-family: sans-serif; -webkit-text-size-adjust: 100%; overflow-x: hidden; position: fixed; width: 100%; height: 100%; }
+    header { position: sticky; top: 0; z-index: 100; background: #fff; padding: calc(10px + env(safe-area-inset-top)) 12px 12px; box-shadow: 0 1px 10px rgba(0,0,0,0.1); }
     .row { display: flex; gap: 8px; max-width: 800px; margin: 0 auto; }
     #q { flex: 1; font-size: 20px; padding: 10px; border-radius: 10px; border: 2px solid #d1d1d6; outline: none; appearance: none; }
-    #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; }
+    #mic { font-size: 20px; width: 50px; border: none; background: #e5e5ea; border-radius: 10px; cursor: pointer; transition: 0.3s; }
+    #mic.active { background: #ff3b30; color: #fff; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-    /* マップエリア */
-    #inlineMapContainer {
-      display: none; background: #444; border-bottom: 1px solid #d1d1d6;
-      height: 400px; position: relative; overflow: hidden; touch-action: none;
-    }
+    #inlineMapContainer { display: none; background: #444; border-bottom: 1px solid #d1d1d6; height: 400px; position: relative; overflow: hidden; touch-action: none; }
+    #mapWrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; width: 100vw; }
+    #mapImg { width: 100% !important; height: auto !important; display: block; }
+    #mapHighlight { position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4); box-sizing: border-box; z-index: 10; box-shadow: 0 0 15px #ff3b30; animation: flash 0.8s infinite alternate; }
+    @keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0.7; transform: scale(1.1); } }
     
-    /* mapWrap: JSで幅を制御するため初期値は画面いっぱい */
-    #mapWrap { 
-      position: absolute; top: 0; left: 0;
-      transform-origin: 0 0;
-      width: 100vw; 
-    }
-    
-    #mapImg { 
-      width: 100% !important; /* 親(mapWrap)の幅に100%従わせる */
-      height: auto !important; 
-      display: block; 
-    }
-    
-    #mapHighlight {
-      position: absolute; border: 4px solid #ff3b30; background: rgba(255,59,48,0.4);
-      box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 15px #ff3b30;
-      animation: flash 0.8s infinite alternate;
-    }
-    @keyframes flash {
-      from { opacity: 1; transform: scale(1); }
-      to { opacity: 0.7; transform: scale(1.1); }
-    }
-    
-    #inlineInfo {
-      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
-      background: rgba(255,255,255,0.95); padding: 10px 12px; border-top: 1px solid #ddd;
-      display: flex; align-items: center; gap: 12px;
-    }
+    #inlineInfo { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; background: rgba(255,255,255,0.95); padding: 10px 12px; border-top: 1px solid #ddd; display: flex; align-items: center; gap: 12px; }
     .info-banchi { font-size: clamp(24px, 8vw, 36px); font-weight: 900; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
     .info-details { flex: 1; min-width: 0; }
     .info-name { font-size: 14px; font-weight: bold; line-height: 1.3; word-break: break-all; }
 
     .version-info { max-width: 800px; margin: 5px auto; padding: 0 12px; display: flex; justify-content: space-between; font-size: 10px; color: #abb2bf; }
-    main { max-width: 800px; margin: 0 auto; padding: 10px; }
+    main { max-width: 800px; margin: 0 auto; padding: 10px; overflow-y: auto; height: calc(100vh - 500px); }
+    .card { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 5px solid var(--accent); }
     .status-bar { max-width: 800px; margin: 5px auto; font-size: 11px; color: #8e8e93; font-weight: bold; }
   </style>
 </head>
-
 <body>
 <header>
   <div class="row">
@@ -75,42 +42,74 @@
 </header>
 
 <div id="inlineMapContainer">
-  <div id="mapWrap">
-    <img id="mapImg" src="map.png" />
-    <div id="mapHighlight"></div>
-  </div>
+  <div id="mapWrap"><img id="mapImg" src="map.png" /><div id="mapHighlight"></div></div>
   <div id="inlineInfo">
     <div id="resBanchi" class="info-banchi">---</div>
-    <div class="info-details">
-      <div id="resArea" style="font-size:11px; color:#666;">エリア</div>
-      <div id="resName" class="info-name">商品名</div>
-    </div>
+    <div class="info-details"><div id="resArea" style="font-size:11px; color:#666;">エリア</div><div id="resName" class="info-name">商品名</div></div>
   </div>
 </div>
-
-<div class="version-info"><span>v2.7.3-hard-lock</span><span id="loadTime">--:--:--</span></div>
+<div class="version-info"><span>v2.7.4-stable-fix</span><span id="loadTime">--:--:--</span></div>
 <main id="out"></main>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 let rows = [];
 let pzoom = null;
+let isContinuous = false;
+let recognition = null;
 
 const $q = document.getElementById("q");
+const $mic = document.getElementById("mic");
+const $out = document.getElementById("out");
 const $mapArea = document.getElementById("inlineMapContainer");
 const $mapWrap = document.getElementById("mapWrap");
 const $mapImg = document.getElementById("mapImg");
 const $mapHighlight = document.getElementById("mapHighlight");
 
-function selectAll(el) { setTimeout(() => { el.setSelectionRange(0, 9999); el.select(); }, 10); }
-$q.addEventListener("focus", (e) => selectAll(e.target));
-
-function search() {
-  const val = $q.value.replace(/\D/g,"").slice(-4);
-  const hits = rows.filter(r => r.last4 === val);
-  if (hits.length === 1) { document.getElementById("out").innerHTML = ""; showMap(hits[0]); $q.blur(); }
+/* --- 音声認識の初期化 --- */
+function initMic() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) { alert("このブラウザは音声認識非対応です"); return; }
+  recognition = new SpeechRec();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.onresult = (e) => {
+    const text = e.results[e.results.length-1][0].transcript;
+    const v = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+    if(v.length === 4) { $q.value = v; search(); }
+  };
+  recognition.onend = () => { if(isContinuous) recognition.start(); };
+  recognition.onerror = (e) => { console.error(e); $mic.classList.remove("active"); isContinuous = false; };
 }
 
+$mic.onclick = () => {
+  if (!recognition) initMic();
+  isContinuous = !isContinuous;
+  if (isContinuous) { recognition.start(); $mic.classList.add("active"); }
+  else { recognition.stop(); $mic.classList.remove("active"); }
+};
+
+/* --- 検索処理 --- */
+function search() {
+  const val = $q.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\D/g,"").slice(-4);
+  $q.value = val;
+  if(val.length !== 4) return;
+  const hits = rows.filter(r => r.last4 === val);
+  if (hits.length === 1) { $out.innerHTML = ""; showMap(hits[0]); $q.blur(); }
+  else if (hits.length > 1) {
+    $mapArea.style.display = "none";
+    $out.innerHTML = hits.map(r => `
+      <div class="card" onclick='showMap(${JSON.stringify(r)})'>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:14px; font-weight:bold;">${r.name}</div>
+          <div style="font-size:24px; font-weight:900; color:#007aff;">${r.banchi}</div>
+        </div>
+      </div>`).join("");
+  }
+}
+
+/* --- マップ表示（強制フィット） --- */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
@@ -118,41 +117,27 @@ function showMap(r) {
   document.getElementById("resBanchi").textContent = r.banchi;
 
   const applyPosition = () => {
-    // 【最重要】窓の幅を物理的に取得して「これ以上は広がるな」と命令する
     const screenW = $mapArea.clientWidth;
-    $mapWrap.style.width = screenW + "px"; // ここを1920ではなくスマホの幅にする
-
+    $mapWrap.style.width = screenW + "px"; // 物理的に画面幅に固定
     const ratio = screenW / 1920;
 
-    // 赤枠配置（比率計算）
     $mapHighlight.style.left = (r.mapX * ratio) + "px";
     $mapHighlight.style.top = (r.mapY * ratio) + "px";
     $mapHighlight.style.width = (r.mapW * ratio) + "px";
     $mapHighlight.style.height = (r.mapH * ratio) + "px";
     $mapHighlight.style.display = "block";
 
-    // 以前のPanzoomが残っていたら一旦破棄して「今の画面幅」で作り直す
-    if (pzoom) {
-      pzoom.destroy();
-    }
-    
-    pzoom = Panzoom($mapWrap, { 
-      maxScale: 10,
-      minScale: 1,
-      contain: 'outside',
-      // 横スライドを封じるため、初期位置を(0,0)に固定
-      startX: 0,
-      startY: 0
-    });
-    
-    // transformをリセット
+    if (pzoom) pzoom.destroy();
+    pzoom = Panzoom($mapWrap, { maxScale: 8, minScale: 1, contain: 'outside' });
     $mapWrap.style.transform = `scale(1) translate(0px, 0px)`;
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
 }
 
+$q.addEventListener("focus", (e) => { setTimeout(() => { e.target.select(); }, 10); });
 $q.oninput = () => { if($q.value.length === 4) search(); };
+
 fetch(API_URL).then(res => res.json()).then(j => {
   rows = j.rows.map(x => ({...x, last4:(x.code8||"").toString().padStart(8,"0").slice(-4)}));
   document.getElementById("status").textContent = `準備完了（${rows.length}件）`;
