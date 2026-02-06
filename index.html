@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>商品検索 PRO (v2.4.0)</title>
+  <title>商品検索 PRO (v2.5.0)</title>
   
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
 
@@ -24,17 +24,17 @@
 
     /* マップエリア */
     #inlineMapContainer {
-      display: none; background: #ccc; border-bottom: 1px solid #d1d1d6;
+      display: none; background: #bbb; border-bottom: 1px solid #d1d1d6;
       height: 400px; position: relative; overflow: hidden; touch-action: none;
     }
-    /* 1920x1358の実寸空間を定義 */
+    /* transform-originを左上に固定(超重要) */
     #mapWrap { width: 1920px; height: 1358px; transform-origin: 0 0; }
     #mapImg { display: block; width: 1920px; height: 1358px; max-width: none !important; pointer-events: none; }
     
     #mapHighlight {
       position: absolute; border: 8px solid #ff3b30; background: rgba(255,59,48,0.3);
       box-sizing: border-box; z-index: 10;
-      box-shadow: 0 0 0 4000px rgba(0,0,0,0.15); /* ターゲット以外を暗く */
+      box-shadow: 0 0 0 4000px rgba(0,0,0,0.2);
     }
     
     #inlineInfo {
@@ -80,14 +80,14 @@
 </div>
 
 <div class="version-info">
-  <span>v2.4.0-math-fixed</span>
+  <span>v2.5.0-absolute-center</span>
   <span id="loadTime">Load: --:--:--</span>
 </div>
 
 <main id="out"></main>
 
 <script>
-const VERSION = "2.4.0";
+const VERSION = "2.5.0";
 const API_URL = "https://script.google.com/macros/s/AKfycbwk_axbzbOKfxcISj6EcwmDGdA334VO3ehSTsMk3yamQPlXknZmH2zrkoJqRLH6tRAT/exec";
 
 let rows = [];
@@ -148,21 +148,12 @@ function search() {
   $q.blur();
 }
 
-/* マップ表示（数学的中央補正版） */
+/* マップ表示（CSSダイレクト補正版） */
 function showMap(r) {
   $mapArea.style.display = "block";
   document.getElementById("resArea").textContent = r.area;
   document.getElementById("resName").textContent = r.name;
   document.getElementById("resBanchi").textContent = r.banchi;
-
-  if (!pzoom) {
-    pzoom = Panzoom($mapWrap, { 
-      maxScale: 5, 
-      minScale: 0.1, 
-      contain: false // 自由な移動を許可
-    });
-    $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
-  }
 
   const applyPosition = () => {
     // 1. 赤枠の配置
@@ -172,28 +163,38 @@ function showMap(r) {
     $mapHighlight.style.height = r.mapH + "px";
     $mapHighlight.style.display = "block";
 
-    // 2. 倍率を「0.8倍」に設定
-    const zoomLevel = 0.8; 
-
-    // 3. コンテナ（表示窓）とターゲット（赤枠）の中心を算出
+    // 2. 数学的中央寄せ（0.8倍設定）
     const cw = $mapArea.clientWidth;
     const ch = $mapArea.clientHeight;
+    const zoomLevel = 0.8; 
     
-    const targetCenterX = parseFloat(r.mapX) + parseFloat(r.mapW) / 2;
-    const targetCenterY = parseFloat(r.mapY) + parseFloat(r.mapH) / 2;
+    // ターゲットの中心点
+    const tx = parseFloat(r.mapX) + (parseFloat(r.mapW) / 2);
+    const ty = parseFloat(r.mapY) + (parseFloat(r.mapH) / 2);
 
-    // 4. 移動量の算出（数学的中央寄せ）
-    const panX = (cw / 2) - (targetCenterX * zoomLevel);
-    const panY = (ch / 2) - (targetCenterY * zoomLevel);
+    // ライブラリをバイパスするダイレクト座標計算
+    const moveX = (cw / 2) - (tx * zoomLevel);
+    const moveY = (ch / 2) - (ty * zoomLevel);
 
-    // 5. 実行
-    pzoom.reset({ animate: false });
+    // スタイルを直接上書きして中央に叩き込む
+    $mapWrap.style.transition = "none";
+    $mapWrap.style.transform = `translate(${moveX}px, ${moveY}px) scale(${zoomLevel})`;
+
+    // 3. Panzoomのインスタンス化（初回のみ）
+    // 以降、手動での拡大縮小を可能にするが、検索時は上記の強制移動が優先される
+    if (!pzoom) {
+      pzoom = Panzoom($mapWrap, { 
+        contain: false, 
+        maxScale: 5,
+        setTransform: (el, { x, y, scale }) => {
+          // 手動操作時もtransform-originを崩さないためのフック
+          el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+        }
+      });
+      $mapWrap.parentElement.addEventListener('wheel', pzoom.zoomWithWheel);
+    }
     
-    setTimeout(() => {
-        pzoom.zoom(zoomLevel, { animate: false });
-        pzoom.pan(panX, panY, { animate: false });
-        $status.textContent = `${r.last4} 表示中 (Zoom:0.8 / v${VERSION})`;
-    }, 10);
+    $status.textContent = `${r.last4} 中央固定完了 (v${VERSION})`;
   };
 
   if ($mapImg.complete) applyPosition(); else $mapImg.onload = applyPosition;
